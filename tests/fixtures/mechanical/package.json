@@ -1,0 +1,8 @@
+{
+  "name": "fixture-mechanical",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node check.mjs"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "superpowers-lite",
+  "version": "0.1.0",
+  "description": "A proportionate inspect-plan-execute-debug-verify-review workflow for Antigravity coding agents.",
+  "author": {
+    "name": "Superpowers Lite Contributors"
+  },
+  "homepage": "https://github.com/obra/superpowers",
+  "repository": "local:D:/Antigravity Plugin/superpowers-lite",
+  "license": "MIT",
+  "keywords": [
+    "antigravity",
+    "skills",
+    "planning",
+    "debugging",
+    "verification",
+    "code-review"
+  ]
+}

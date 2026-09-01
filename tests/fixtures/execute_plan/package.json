@@ -1,0 +1,8 @@
+{
+  "name": "fixture-execute-plan",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
