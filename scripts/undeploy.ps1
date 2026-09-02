@@ -11,6 +11,7 @@ Set-StrictMode -Version Latest
 $pluginId = 'superpowers-lite'
 $appPluginsRoot = Join-Path $env:USERPROFILE '.gemini\config\plugins'
 $appTarget = Join-Path $appPluginsRoot $pluginId
+$cliCandidate = Join-Path $env:USERPROFILE '.gemini\antigravity-cli\plugins\superpowers-lite'
 
 function Get-ManagedMarker {
     param([Parameter(Mandatory)][string]$Target)
@@ -50,13 +51,27 @@ function Test-CliRegistered {
     return @($list.imports | Where-Object { $_.name -eq $pluginId }).Count -eq 1
 }
 
+function Get-CliRegistration {
+    $agy = Get-Command agy -ErrorAction Stop
+    $raw = & $agy.Source plugin list 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 0) { throw "agy plugin list failed: $raw" }
+    $list = $raw | ConvertFrom-Json
+    return @($list.imports | Where-Object { $_.name -eq $pluginId }) | Select-Object -First 1
+}
+
 if (-not $Apply) {
     Write-Output 'DRY RUN: no files or plugin registrations will be changed.'
     if ($Surface -in @('App', 'All')) { Show-ManagedFiles -Label 'App' -Target $appTarget }
     if ($Surface -in @('Cli', 'All')) {
-        $null = Get-ManagedMarker -Target $appTarget
-        Write-Output "CLI registration present: $(Test-CliRegistered)"
-        Write-Output "CLI runtime is shared with managed App target: $appTarget"
+        $registration = Get-CliRegistration
+        if ($null -eq $registration) { Write-Output 'CLI registration present: False' }
+        else {
+            $runtime = if ($registration.source -eq 'antigravity') { $appTarget } else { $cliCandidate }
+            $null = Get-ManagedMarker -Target $runtime
+            Write-Output 'CLI registration present: True'
+            Write-Output "CLI registration source: $($registration.source)"
+            Write-Output "CLI managed runtime: $runtime"
+        }
     }
     Write-Output 'Re-run with -Apply to undeploy only the managed targets shown above.'
     exit 0
@@ -67,8 +82,9 @@ $appMarker = Get-ManagedMarker -Target $appTarget
 if ($Surface -in @('Cli', 'All')) {
     if (Test-CliRegistered) {
         $agy = Get-Command agy -ErrorAction Stop
+        $registration = Get-CliRegistration
         $preserveRoot = $null
-        if ($Surface -eq 'Cli') {
+        if ($Surface -eq 'Cli' -and $registration.source -eq 'antigravity') {
             $preserveRoot = Join-Path ([System.IO.Path]::GetTempPath()) "superpowers-lite-undeploy-$([guid]::NewGuid().ToString('N'))"
             New-Item -ItemType Directory -Path $preserveRoot -Force | Out-Null
             Get-ChildItem -LiteralPath $appTarget -Force | ForEach-Object {
@@ -77,7 +93,7 @@ if ($Surface -in @('Cli', 'All')) {
         }
         & $agy.Source plugin uninstall $pluginId
         if ($LASTEXITCODE -ne 0) { throw "agy plugin uninstall failed with exit code $LASTEXITCODE" }
-        if ($Surface -eq 'Cli' -and -not (Test-Path -LiteralPath $appTarget -PathType Container)) {
+        if ($preserveRoot -and -not (Test-Path -LiteralPath $appTarget -PathType Container)) {
             New-Item -ItemType Directory -Path $appTarget -Force | Out-Null
             Get-ChildItem -LiteralPath $preserveRoot -Force | ForEach-Object {
                 Copy-Item -LiteralPath $_.FullName -Destination $appTarget -Recurse -Force

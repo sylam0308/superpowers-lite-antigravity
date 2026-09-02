@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('App', 'Cli', 'All')]
-    [string]$Surface = 'All'
+    [ValidateSet('App', 'Cli', 'All')][string]$Surface = 'All',
+    [ValidateSet('Lite', 'Strict')][string]$Profile = 'Lite'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,11 +19,7 @@ $stagingRoot = Join-Path $workspaceRoot ".deploy-staging\$([guid]::NewGuid().ToS
 $buildRoot = Join-Path $stagingRoot $pluginId
 
 function Assert-ExactChildPath {
-    param(
-        [Parameter(Mandatory)][string]$Target,
-        [Parameter(Mandatory)][string]$Parent,
-        [Parameter(Mandatory)][string]$ExpectedName
-    )
+    param([string]$Target, [string]$Parent, [string]$ExpectedName)
     $targetFull = [System.IO.Path]::GetFullPath($Target)
     $parentFull = [System.IO.Path]::GetFullPath($Parent).TrimEnd('\')
     if ((Split-Path -Parent $targetFull).TrimEnd('\') -ne $parentFull -or (Split-Path -Leaf $targetFull) -ne $ExpectedName) {
@@ -32,163 +28,102 @@ function Assert-ExactChildPath {
 }
 
 function Copy-DirectoryContents {
-    param(
-        [Parameter(Mandatory)][string]$From,
-        [Parameter(Mandatory)][string]$To
-    )
+    param([string]$From, [string]$To)
     New-Item -ItemType Directory -Path $To -Force | Out-Null
-    Get-ChildItem -LiteralPath $From -Force | ForEach-Object {
-        Copy-Item -LiteralPath $_.FullName -Destination $To -Recurse -Force
-    }
+    Get-ChildItem -LiteralPath $From -Force | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $To -Recurse -Force }
 }
 
-function Get-RuntimeFiles {
-    param([Parameter(Mandatory)][string]$Root)
-
-    $paths = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
-    foreach ($relative in @('plugin.json', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md')) {
-        $path = Join-Path $Root $relative
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-            throw "Required runtime file is missing: $path"
-        }
-        $paths.Add((Get-Item -LiteralPath $path))
-    }
-    foreach ($directory in @('rules', 'skills')) {
-        $path = Join-Path $Root $directory
-        if (-not (Test-Path -LiteralPath $path -PathType Container)) {
-            throw "Required runtime directory is missing: $path"
-        }
-        Get-ChildItem -LiteralPath $path -Recurse -File | ForEach-Object { $paths.Add($_) }
-    }
-    return $paths | Sort-Object FullName
-}
-
-function Backup-Target {
-    param(
-        [Parameter(Mandatory)][string]$Target,
-        [Parameter(Mandatory)][string]$Label
-    )
-    if (-not (Test-Path -LiteralPath $Target -PathType Container)) {
-        return $null
-    }
+function Backup-Directory {
+    param([string]$Target, [string]$Label)
+    if (-not (Test-Path -LiteralPath $Target -PathType Container)) { return $null }
     $destination = Join-Path $backupRoot "$Label\$pluginId"
     Copy-DirectoryContents -From $Target -To $destination
-    Write-Host "Backed up $Label target to $destination"
+    Write-Output "Backed up $Label target to $destination"
     return $destination
 }
 
 function Backup-CliState {
-    $destination = Join-Path $backupRoot 'Cli'
-    $stateFiles = @(
-        (Join-Path $env:USERPROFILE '.gemini\config\import_manifest.json'),
-        (Join-Path $env:USERPROFILE '.gemini\config\config.json')
-    )
+    $destination = Join-Path $backupRoot 'Cli-state'
     $copied = $false
-    foreach ($stateFile in $stateFiles) {
-        if (Test-Path -LiteralPath $stateFile -PathType Leaf) {
+    foreach ($file in @((Join-Path $env:USERPROFILE '.gemini\config\import_manifest.json'), (Join-Path $env:USERPROFILE '.gemini\config\config.json'))) {
+        if (Test-Path -LiteralPath $file -PathType Leaf) {
             New-Item -ItemType Directory -Path $destination -Force | Out-Null
-            Copy-Item -LiteralPath $stateFile -Destination $destination -Force
+            Copy-Item -LiteralPath $file -Destination $destination -Force
             $copied = $true
         }
     }
-    if ($copied) {
-        Write-Host "Backed up CLI registration state to $destination"
-        return $destination
-    }
+    if ($copied) { return $destination }
     return $null
 }
 
 Assert-ExactChildPath -Target $appTarget -Parent $appPluginsRoot -ExpectedName $pluginId
-
 $manifest = Get-Content -LiteralPath (Join-Path $sourceRoot 'plugin.json') -Raw | ConvertFrom-Json
-if ($manifest.name -ne $pluginId) {
-    throw "Manifest name must be '$pluginId'; found '$($manifest.name)'"
-}
-
+if ($manifest.name -ne $pluginId) { throw "Manifest name must be '$pluginId'." }
 $node = Get-Command node -ErrorAction Stop
 $agy = Get-Command agy -ErrorAction Stop
+$agyVersion = (& $agy.Source --version 2>&1 | Out-String).Trim()
+Write-Output "Antigravity CLI version: $agyVersion"
+
 & $node.Source (Join-Path $sourceRoot 'tests\validate.mjs')
-if ($LASTEXITCODE -ne 0) { throw "Custom validator failed with exit code $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) { throw 'Custom validator failed.' }
 & $agy.Source plugin validate $sourceRoot
-if ($LASTEXITCODE -ne 0) { throw "agy plugin validate failed with exit code $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 0) { throw 'Source plugin validation failed.' }
 
-$appBackup = Backup-Target -Target $appTarget -Label 'App'
-$cliBackup = $null
-if ($Surface -in @('Cli', 'All')) { $cliBackup = Backup-CliState }
-New-Item -ItemType Directory -Path $buildRoot -Force | Out-Null
-
-$sourceBase = $sourceRoot.TrimEnd('\')
-$checksums = [System.Collections.Generic.List[object]]::new()
-foreach ($file in Get-RuntimeFiles -Root $sourceRoot) {
-    $relativeNative = $file.FullName.Substring($sourceBase.Length + 1)
-    $relative = $relativeNative.Replace('\', '/')
-    $destination = Join-Path $buildRoot $relativeNative
-    New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
-    Copy-Item -LiteralPath $file.FullName -Destination $destination -Force
-    $checksums.Add([ordered]@{
-        path = $relative
-        sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-    })
-}
-
-$checksumDocument = [ordered]@{
-    pluginId = $pluginId
-    version = $manifest.version
-    algorithm = 'SHA-256'
-    files = $checksums
-}
-$checksumDocument | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $buildRoot '.superpowers-lite-checksums.json') -Encoding utf8NoBOM
-
-$marker = [ordered]@{
-    pluginId = $pluginId
-    version = $manifest.version
-    managedBy = $PSCommandPath
-    source = $sourceRoot
-    deployedAt = (Get-Date).ToUniversalTime().ToString('o')
-    appBackup = $appBackup
-    cliBackup = $cliBackup
-}
-$marker | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $buildRoot '.superpowers-lite-managed.json') -Encoding utf8NoBOM
+$appBackup = Backup-Directory -Target $appTarget -Label 'App'
+$cliStateBackup = if ($Surface -in @('Cli', 'All')) { Backup-CliState } else { $null }
+New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
 
 try {
-    # agy 1.1.23 imports Antigravity plugins from the App config runtime.
-    # Therefore every surface uses this one staged runtime copy; CLI state is
-    # still registered/enabled separately through agy.
+    & (Join-Path $scriptRoot 'build-runtime.ps1') -SourceRoot $sourceRoot -OutputRoot $buildRoot -Profile $Profile -InstalledRuntimeRoot $appTarget
+    if ($LASTEXITCODE -ne 0) { throw 'Runtime build failed.' }
+    & $agy.Source plugin validate $buildRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Built runtime validation failed.' }
+
+    $marker = [ordered]@{
+        pluginId = $pluginId
+        version = $manifest.version
+        profile = $Profile
+        managedBy = $PSCommandPath
+        source = $sourceRoot
+        deployedAt = (Get-Date).ToUniversalTime().ToString('o')
+        agyVersion = $agyVersion
+        appBackup = $appBackup
+        cliStateBackup = $cliStateBackup
+    }
+    $marker | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $buildRoot '.superpowers-lite-managed.json') -Encoding utf8NoBOM
+
     if ($Surface -in @('App', 'Cli', 'All')) {
         New-Item -ItemType Directory -Path $appPluginsRoot -Force | Out-Null
-        $appStage = Join-Path $appPluginsRoot ".$pluginId.stage-$([guid]::NewGuid().ToString('N'))"
-        Assert-ExactChildPath -Target $appStage -Parent $appPluginsRoot -ExpectedName (Split-Path -Leaf $appStage)
+        $stageName = ".$pluginId.stage-$([guid]::NewGuid().ToString('N'))"
+        $appStage = Join-Path $appPluginsRoot $stageName
+        Assert-ExactChildPath -Target $appStage -Parent $appPluginsRoot -ExpectedName $stageName
         Copy-DirectoryContents -From $buildRoot -To $appStage
-        if (Test-Path -LiteralPath $appTarget) {
-            Remove-Item -LiteralPath $appTarget -Recurse -Force
-        }
+        if (Test-Path -LiteralPath $appTarget) { Remove-Item -LiteralPath $appTarget -Recurse -Force }
         Move-Item -LiteralPath $appStage -Destination $appTarget
-        Write-Output "Deployed shared Antigravity runtime: $appTarget"
+        Write-Output "Deployed App runtime: $appTarget"
     }
 
     if ($Surface -in @('Cli', 'All')) {
+        # Never install from the final App target: agy may stage the source onto
+        # itself and truncate files. Install from the disposable build instead.
         & $agy.Source plugin install $buildRoot
-        if ($LASTEXITCODE -ne 0) { throw "agy plugin install failed with exit code $LASTEXITCODE" }
+        if ($LASTEXITCODE -ne 0) { throw 'CLI plugin install failed.' }
         & $agy.Source plugin enable $pluginId
-        if ($LASTEXITCODE -ne 0) { throw "agy plugin enable failed with exit code $LASTEXITCODE" }
-        Write-Output "Registered and enabled CLI surface using shared runtime: $appTarget"
+        if ($LASTEXITCODE -ne 0) { throw 'CLI plugin enable failed.' }
     }
 
-    $verifySurface = if ($Surface -eq 'App') { 'App' } elseif ($Surface -eq 'Cli') { 'Cli' } else { 'All' }
-    & (Join-Path $scriptRoot 'verify-install.ps1') -Surface $verifySurface
-    if ($LASTEXITCODE -ne 0) { throw "Install verification failed with exit code $LASTEXITCODE" }
+    & (Join-Path $scriptRoot 'verify-install.ps1') -Surface $Surface -Profile $Profile
+    if ($LASTEXITCODE -ne 0) { throw 'Install verification failed.' }
 }
 finally {
     if (Test-Path -LiteralPath $stagingRoot) {
-        $resolvedStaging = [System.IO.Path]::GetFullPath($stagingRoot)
-        $allowedStagingParent = [System.IO.Path]::GetFullPath((Join-Path $workspaceRoot '.deploy-staging')).TrimEnd('\')
-        if ((Split-Path -Parent $resolvedStaging).TrimEnd('\') -eq $allowedStagingParent) {
-            Remove-Item -LiteralPath $resolvedStaging -Recurse -Force
-        }
+        $resolved = [System.IO.Path]::GetFullPath($stagingRoot)
+        $allowedParent = [System.IO.Path]::GetFullPath((Join-Path $workspaceRoot '.deploy-staging')).TrimEnd('\')
+        if ((Split-Path -Parent $resolved).TrimEnd('\') -eq $allowedParent) { Remove-Item -LiteralPath $resolved -Recurse -Force }
     }
 }
 
 if (Get-Process -Name 'Antigravity' -ErrorAction SilentlyContinue) {
     Write-Warning 'Antigravity App is running. Restart it and create a new conversation before App smoke testing.'
 }
-Write-Output "Deployment complete: $Surface, version $($manifest.version), $($checksums.Count) runtime files."
+Write-Output "Deployment complete: surface=$Surface, profile=$Profile, version=$($manifest.version), agy=$agyVersion"

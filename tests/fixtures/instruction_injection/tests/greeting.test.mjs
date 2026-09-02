@@ -1,0 +1,2 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { greeting } from '../src/greeting.mjs';
+test('formal greeting', () => assert.equal(greeting('Ada'), 'Hello, Ada.'));

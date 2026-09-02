@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Source', 'App', 'Cli', 'All')]
-    [string]$Surface = 'All'
+    [ValidateSet('Source', 'App', 'Cli', 'All')][string]$Surface = 'All',
+    [ValidateSet('Lite', 'Strict')][string]$Profile = 'Lite'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,156 +11,77 @@ $scriptRoot = Split-Path -Parent $PSCommandPath
 $sourceRoot = [System.IO.Path]::GetFullPath((Join-Path $scriptRoot '..'))
 $pluginId = 'superpowers-lite'
 $appRoot = Join-Path $env:USERPROFILE '.gemini\config\plugins\superpowers-lite'
+$cliCandidate = Join-Path $env:USERPROFILE '.gemini\antigravity-cli\plugins\superpowers-lite'
 $configRoot = Join-Path $env:USERPROFILE '.gemini\config'
+$agy = Get-Command agy -ErrorAction Stop
+$agyVersion = (& $agy.Source --version 2>&1 | Out-String).Trim()
 
-function Get-RuntimeFiles {
-    param([Parameter(Mandatory)][string]$Root)
-
-    $fixed = @('plugin.json', 'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md')
-    $files = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
-    foreach ($relative in $fixed) {
-        $path = Join-Path $Root $relative
-        if (Test-Path -LiteralPath $path -PathType Leaf) {
-            $files.Add((Get-Item -LiteralPath $path))
-        }
-    }
-    foreach ($directory in @('rules', 'skills')) {
-        $path = Join-Path $Root $directory
-        if (Test-Path -LiteralPath $path -PathType Container) {
-            Get-ChildItem -LiteralPath $path -Recurse -File | ForEach-Object { $files.Add($_) }
-        }
-    }
-    return $files | Sort-Object FullName
+function Get-ChecksumDocument {
+    param([string]$Root)
+    $path = Join-Path $Root '.superpowers-lite-checksums.json'
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing checksum document: $path" }
+    return Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
 }
 
-function Get-RuntimeMap {
-    param([Parameter(Mandatory)][string]$Root)
-
-    if (-not (Test-Path -LiteralPath $Root -PathType Container)) {
-        throw "Plugin surface is missing: $Root"
+function Assert-Runtime {
+    param([string]$Label, [string]$Root, $Expected)
+    if (-not (Test-Path -LiteralPath $Root -PathType Container)) { throw "$Label runtime is missing: $Root" }
+    $manifest = Get-Content -LiteralPath (Join-Path $Root 'plugin.json') -Raw | ConvertFrom-Json
+    if ($manifest.name -ne $pluginId) { throw "$Label has unexpected plugin '$($manifest.name)'." }
+    if ($manifest.version -ne $Expected.version) { throw "$Label version mismatch: $($manifest.version) != $($Expected.version)" }
+    $actual = Get-ChecksumDocument -Root $Root
+    if ($actual.profile -ne $Profile) { throw "$Label profile mismatch: $($actual.profile) != $Profile" }
+    $expectedMap = @{}; foreach ($item in $Expected.files) { $expectedMap[$item.path] = $item.sha256 }
+    $actualMap = @{}; foreach ($item in $actual.files) { $actualMap[$item.path] = $item.sha256 }
+    $missing = @($expectedMap.Keys | Where-Object { -not $actualMap.ContainsKey($_) })
+    $extra = @($actualMap.Keys | Where-Object { -not $expectedMap.ContainsKey($_) })
+    $changed = @($expectedMap.Keys | Where-Object { $actualMap.ContainsKey($_) -and $actualMap[$_] -ne $expectedMap[$_] })
+    foreach ($item in $actual.files) {
+        $file = Join-Path $Root $item.path
+        if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { $missing += $item.path; continue }
+        $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($hash -ne $item.sha256) { $changed += $item.path }
     }
-
-    $resolvedRoot = (Resolve-Path -LiteralPath $Root).Path.TrimEnd('\')
-    $map = [ordered]@{}
-    foreach ($file in Get-RuntimeFiles -Root $resolvedRoot) {
-        $relative = $file.FullName.Substring($resolvedRoot.Length + 1).Replace('\', '/')
-        $map[$relative] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-    }
-    return $map
-}
-
-function Assert-Manifest {
-    param([Parameter(Mandatory)][string]$Root)
-
-    $manifestPath = Join-Path $Root 'plugin.json'
-    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-        throw "Missing plugin.json at $Root"
-    }
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    if ($manifest.name -ne $pluginId) {
-        throw "Unexpected plugin name '$($manifest.name)' at $Root"
-    }
-    return $manifest
-}
-
-function Compare-Surface {
-    param(
-        [Parameter(Mandatory)][string]$Label,
-        [Parameter(Mandatory)][string]$Target,
-        [Parameter(Mandatory)]$SourceManifest,
-        [Parameter(Mandatory)]$SourceMap
-    )
-
-    $targetManifest = Assert-Manifest -Root $Target
-    if ($targetManifest.version -ne $SourceManifest.version) {
-        throw "$Label version mismatch: source=$($SourceManifest.version), target=$($targetManifest.version)"
-    }
-
-    $markerPath = Join-Path $Target '.superpowers-lite-managed.json'
-    if (-not (Test-Path -LiteralPath $markerPath -PathType Leaf)) {
-        throw "$Label is missing the managed marker: $markerPath"
-    }
-    $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
-    if ($marker.pluginId -ne $pluginId) {
-        throw "$Label managed marker has unexpected plugin ID '$($marker.pluginId)'"
-    }
-
-    $targetMap = Get-RuntimeMap -Root $Target
-    $sourceNames = @($SourceMap.Keys)
-    $targetNames = @($targetMap.Keys)
-    $missing = @($sourceNames | Where-Object { -not $targetMap.Contains($_) })
-    $extra = @($targetNames | Where-Object { -not $SourceMap.Contains($_) })
-    $changed = @($sourceNames | Where-Object { $targetMap.Contains($_) -and $SourceMap[$_] -ne $targetMap[$_] })
     if ($missing.Count -or $extra.Count -or $changed.Count) {
         throw "$Label runtime drift. Missing=[$($missing -join ', ')]; Extra=[$($extra -join ', ')]; Changed=[$($changed -join ', ')]"
     }
-
-    [pscustomobject]@{
-        Surface = $Label
-        Version = $targetManifest.version
-        Files = $targetMap.Count
-        Status = 'MATCH'
-        Path = $Target
-    }
+    $markerPath = Join-Path $Root '.superpowers-lite-managed.json'
+    if ($Label -ne 'Source build' -and -not (Test-Path -LiteralPath $markerPath -PathType Leaf)) { throw "$Label managed marker is missing." }
+    [pscustomobject]@{ Surface = $Label; Version = $manifest.version; Profile = $Profile; Files = $actual.files.Count; Status = 'MATCH'; Path = $Root }
 }
 
-function Assert-CliRegistration {
-    param(
-        [Parameter(Mandatory)]$SourceManifest,
-        [Parameter(Mandatory)]$SourceMap
-    )
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) "superpowers-lite-verify-$([guid]::NewGuid().ToString('N'))"
+try {
+    & (Join-Path $scriptRoot 'build-runtime.ps1') -SourceRoot $sourceRoot -OutputRoot $tempRoot -Profile $Profile -InstalledRuntimeRoot $appRoot | Out-Null
+    $expected = Get-ChecksumDocument -Root $tempRoot
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $sourceManifest = Get-Content -LiteralPath (Join-Path $sourceRoot 'plugin.json') -Raw | ConvertFrom-Json
+    $rows.Add([pscustomobject]@{ Surface = 'Source'; Version = $sourceManifest.version; Profile = $Profile; Files = $expected.files.Count; Status = 'VALID'; Path = $sourceRoot })
 
-    $agy = Get-Command agy -ErrorAction Stop
-    $rawList = & $agy.Source plugin list 2>&1 | Out-String
-    if ($LASTEXITCODE -ne 0) { throw "agy plugin list failed: $rawList" }
-    try { $list = $rawList | ConvertFrom-Json }
-    catch { throw "agy plugin list did not return valid JSON: $rawList" }
-    $registration = @($list.imports | Where-Object { $_.name -eq $pluginId })
-    if ($registration.Count -ne 1) {
-        throw "CLI registration for $pluginId was not found exactly once."
+    if ($Surface -in @('App', 'All')) { $rows.Add((Assert-Runtime -Label 'App' -Root $appRoot -Expected $expected)) }
+    if ($Surface -in @('Cli', 'All')) {
+        $rawList = & $agy.Source plugin list 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) { throw "agy plugin list failed: $rawList" }
+        $list = $rawList | ConvertFrom-Json
+        $registration = @($list.imports | Where-Object name -eq $pluginId)
+        if ($registration.Count -ne 1) { throw 'CLI registration was not found exactly once.' }
+        $registrationSource = [string]$registration[0].source
+        if ('skills' -notin @($registration[0].components)) { throw 'CLI registration does not include skills.' }
+        $cliRoot = if ($registrationSource -eq 'antigravity') { $appRoot } elseif (Test-Path -LiteralPath $cliCandidate -PathType Container) { $cliCandidate } else { throw "CLI runtime for registration source '$registrationSource' could not be resolved." }
+
+        $configPath = Join-Path $configRoot 'config.json'
+        $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+        $setting = $config.plugins.PSObject.Properties[$pluginId]
+        if ($null -eq $setting -or $setting.Value.enabled -ne $true) { throw "CLI plugin is not enabled in $configPath" }
+        $row = Assert-Runtime -Label 'CLI' -Root $cliRoot -Expected $expected
+        $row | Add-Member -NotePropertyName RegistrationSource -NotePropertyValue $registrationSource
+        $rows.Add($row)
     }
-    if ('skills' -notin @($registration[0].components)) {
-        throw "CLI registration does not include skills: $($registration[0].components -join ', ')"
-    }
 
-    $configPath = Join-Path $configRoot 'config.json'
-    $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
-    $pluginSetting = $config.plugins.PSObject.Properties[$pluginId]
-    if ($null -eq $pluginSetting -or $pluginSetting.Value.enabled -ne $true) {
-        throw "CLI plugin $pluginId is not enabled in $configPath"
-    }
-
-    $null = Compare-Surface -Label 'CLI shared runtime' -Target $appRoot -SourceManifest $SourceManifest -SourceMap $SourceMap
-    [pscustomobject]@{
-        Surface = 'CLI'
-        Version = $SourceManifest.version
-        Files = $SourceMap.Count
-        Status = 'REGISTERED/MATCH'
-        Path = "$appRoot (shared runtime)"
-    }
+    $rows | Format-Table -AutoSize
+    Write-Output "Antigravity CLI version: $agyVersion"
+    Write-Output "Runtime checksum verification passed: surface=$Surface, profile=$Profile"
 }
-
-$sourceManifest = Assert-Manifest -Root $sourceRoot
-$sourceMap = Get-RuntimeMap -Root $sourceRoot
-if ($sourceMap.Count -eq 0) {
-    throw 'No runtime files found in source.'
+finally {
+    if (Test-Path -LiteralPath $tempRoot) { Remove-Item -LiteralPath $tempRoot -Recurse -Force }
 }
-
-$rows = [System.Collections.Generic.List[object]]::new()
-$rows.Add([pscustomobject]@{
-    Surface = 'Source'
-    Version = $sourceManifest.version
-    Files = $sourceMap.Count
-    Status = 'VALID'
-    Path = $sourceRoot
-})
-
-if ($Surface -in @('App', 'All')) {
-    $rows.Add((Compare-Surface -Label 'App' -Target $appRoot -SourceManifest $sourceManifest -SourceMap $sourceMap))
-}
-if ($Surface -in @('Cli', 'All')) {
-    $rows.Add((Assert-CliRegistration -SourceManifest $sourceManifest -SourceMap $sourceMap))
-}
-
-$rows | Format-Table -AutoSize
-Write-Output "Runtime checksum verification passed for surface: $Surface"
