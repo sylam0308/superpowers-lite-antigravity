@@ -80,15 +80,26 @@ Lite 0.3.3 makes the surface decision mutually exclusive. A native `ask_question
 
 The first CLI regression run after 0.3.3 passed `plan_feature` 2/2 but passed `ambiguous_architecture` only 1/2. In the failed run, Flash treated an available CLI brain path as permission to create an implementation plan even though the user had not selected a storage backend. Version 0.3.4 moves that decision to the first section: persistent storage without a named backend may inspect and ask four to six option questions only; `write_to_file`, brain artifacts, and workspace plans are explicitly forbidden until the answer exists.
 
+## 0.5.0 observable contracts and opt-in enforcement
+
+The hardening series replaces prompt-specific gates with general observable boundaries:
+
+- NDJSON behavior tests inspect tool order, mutations, verification, filesystem changes, outcomes, and token diagnostics.
+- Plan Contract v2 maps acceptance criteria, scope, steps, and exact verification while retaining human-readable Markdown and the native App Proceed flow.
+- Optional project policy adds required checks, protected paths, and review severities without forcing configuration on projects.
+- The default Lite build remains hook-free. An independently selected Strict build uses Antigravity's documented PreToolUse and Stop contracts to enforce scope and post-mutation evidence, with a bounded no-progress breaker.
+
+This is an independent design for Antigravity. It does not copy upstream hook or skill implementations.
+
 ## Explicit exclusions
 
 - Mandatory brainstorming or universal skill invocation
 - Design documents separate from implementation plans
 - Required worktrees, subagents, task ledgers, or model routing
 - Automatic commits, pushes, merges, or branch cleanup
-- Hooks, MCP servers, telemetry, HUDs, and session bootstrap
+- Default-on hooks, MCP servers, telemetry, HUDs, and session bootstrap
 - Tool names tied to a different agent host
 
 ## Attribution boundary
 
-General workflow concepts and upstream influence are attributed in `THIRD_PARTY_NOTICES.md`. Runtime prose was written specifically for this plugin. No upstream scripts, hooks, prompt templates, diagrams, or skill bodies are distributed in Lite.
+General workflow concepts and upstream influence are attributed in `THIRD_PARTY_NOTICES.md`. Runtime prose and the optional Strict hook were written specifically for this plugin. No upstream scripts, hooks, prompt templates, diagrams, or skill bodies are distributed.

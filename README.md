@@ -9,7 +9,7 @@ Lightweight, evidence-driven coding workflows for medium projects and Gemini 3.7
 Yêu cầu rõ và cục bộ được làm theo luồng nhanh: đọc đúng file, sửa tối thiểu, chạy kiểm tra nhắm mục tiêu. Plugin không bắt brainstorm, viết design, tạo worktree, gọi subagent, dùng TDD, hay commit cho mọi việc. Khi task cần kỷ luật cao hơn, gọi một command riêng:
 
 ```text
-/superpowers-lite:plan     Hỏi 4–6 option nếu thiếu spec; App chỉ ghi artifact (Proceed), CLI chỉ ghi docs/plans
+/superpowers-lite:plan     Hỏi option khi còn quyết định quan trọng; sinh Plan Contract v2 + Proceed
 /superpowers-lite:execute  Bấm Proceed (App) hoặc gọi lệnh này: bám bước, verify, mới báo done
 /superpowers-lite:debug    Reproduce và tìm root cause trước khi sửa
 /superpowers-lite:verify   Chạy kiểm tra mới và báo phần chưa verify
@@ -20,10 +20,14 @@ Trên Antigravity App:
 
 Lệnh có sẵn của App là `/plan` (artifact + Proceed, **không** hỏi option). Lệnh Lite là **`/superpowers-lite:plan`** — chọn đúng dòng này trong menu `/`.
 
-1. Gõ `/superpowers-lite:plan` kèm yêu cầu. Chỉ khi tin nhắn đã nêu path `dir/file.ext` (hoặc hàm + contract) **và** lệnh verify thì agent mới ghi plan ngay. Tên folder không đủ.
-2. Yêu cầu kiểu "nâng cấp skills" là thiếu spec: một vòng **4–6 câu**, mỗi câu có option (`ask_question` nếu App có, không thì markdown + `(Recommended)`). Trả lời xong mới có plan.
+1. Gõ `/superpowers-lite:plan` kèm yêu cầu. Agent inspect repo trước, rồi chỉ hỏi khi còn quyết định ảnh hưởng behavior/interface, data, vendor/dependency, security, compatibility hoặc scope.
+2. Thay đổi kiến trúc thường có một vòng **4–6 câu option** (`ask_question` nếu App có). Không hỏi lại facts đã có và không tạo câu hỏi cho đủ số lượng. Spec thật sự đầy đủ thì ghi plan ngay.
 3. App: sau native question card, chỉ ghi brain artifact `implementation_plan.md` với `RequestFeedback: true`; tuyệt đối không ghi `docs/plans/` ở lượt plan. Host sẽ hiện **Proceed** trên artifact hoặc trong chat.
-4. CLI không có nút Proceed: sau khi duyệt file `docs/plans/`, gọi `/superpowers-lite:execute <path>`. Execute sẽ copy artifact ra `docs/plans/` nếu file chưa có.
+4. CLI không có nút Proceed: sau khi duyệt file `docs/plans/`, gọi `/superpowers-lite:execute <path>`. Không tạo plan copy thứ hai.
+
+Plan mới có phần Markdown dễ review và một `superpowers-lite-contract` JSON comment. Contract ánh xạ `AC-*` → `S-*` → `V-*`, khóa allow/deny scope và lệnh verify. Plan cũ vẫn execute theo legacy mode nhưng không có scope enforcement máy đọc.
+
+Project có thể tự khai báo required checks và protected paths bằng `.agents/superpowers-lite.json`; plugin không tự tạo file này.
 
 Ví dụ:
 
@@ -64,11 +68,20 @@ Thư mục clone là source of truth. Script tự xác định source theo vị 
 
 ### Deploy và cập nhật
 
-App và CLI giữ session/state riêng, nhưng với CLI 1.1.23, plugin runtime được import từ kho App tại `%USERPROFILE%\.gemini\config\plugins`. Script vẫn thực hiện hai bước riêng: staged-copy runtime và đăng ký/enable bằng `agy`. Không sửa bản cài trực tiếp; deploy source đã validate:
+App và CLI giữ session/state riêng. Vì vị trí runtime có thể đổi theo phiên bản `agy`, script không hard-code shared profile: nó ghi CLI version, đọc registration source từ `agy plugin list`, rồi checksum đúng runtime App hoặc CLI thực tế. Không sửa bản cài trực tiếp; deploy source đã validate:
 
 ```powershell
 pwsh -File scripts\deploy.ps1 -Surface All
 ```
+
+Mặc định là profile `Lite`, không hook. Với task rủi ro cao có thể bật Strict; cần restart App và conversation mới sau khi đổi profile:
+
+```powershell
+pwsh -File scripts\deploy.ps1 -Surface All -Profile Strict
+pwsh -File scripts\verify-install.ps1 -Surface All -Profile Strict
+```
+
+Strict **deny** write ngoài Contract v2, force-ask protected path / dependency / destructive / commit / push, và ép verification mới sau lần sửa cuối. Xem `docs/STRICT_PROFILE.md`.
 
 Có thể dùng `-Surface App` hoặc `-Surface Cli`. Script tạo checksum, backup target chính xác, staged-copy cho App, cài/enable CLI, rồi so sánh build. Nếu App đang chạy, hãy restart App và mở conversation mới trước khi smoke test.
 
@@ -85,10 +98,11 @@ agy plugin list
 
 ### Behavior tests
 
-Mặc định script tạo bản sao disposable của fixtures và chạy hai vòng cho tám scenario bằng Gemini 3.7 Flash High:
+Harness dùng `agy --output-format stream-json` để chấm cả tool trajectory, filesystem diff, structured outcome và test output. Mặc định tạo fixture disposable và chạy hai vòng critical scenarios bằng Gemini 3.7 Flash High:
 
 ```powershell
 pwsh -File tests\run-behavior-tests.ps1
+pwsh -File tests\run-behavior-tests.ps1 -Suite All -Runs 2
 ```
 
 Dùng `-DryRun` để chỉ dựng case/prompt và kiểm tra harness, hoặc `-Runs 1` cho vòng thử nhanh. Kết quả được ghi ngoài source fixture trong thư mục tạm và tóm tắt thành JSON/Markdown.
@@ -123,7 +137,7 @@ Script chỉ thao tác target có marker đúng `superpowers-lite`. CLI được
 
 A clear, localized request takes the quick path: inspect, make the smallest edit, and run a targeted check. Planning is reserved for meaningful sequencing or risk. Debugging starts from a reproduction. Completion claims require fresh evidence.
 
-The five public commands are `/superpowers-lite:plan`, `execute`, `debug`, `verify`, and `review`. Incomplete `/plan` asks one round of four to six option questions, then writes exactly one 3–7-step plan: the brain `implementation_plan.md` with requested feedback on App, or a workspace `docs/plans` file on CLI. Never write both in one planning turn. Click **Proceed** (App) or run `/execute` (CLI) to follow those steps in order. Do not claim done while a checkbox is open or a required check failed. Skills do not preload the entire library.
+The five public commands are `/superpowers-lite:plan`, `execute`, `debug`, `verify`, and `review`. Planning inspects first and asks one option round only for unresolved material decisions. It then writes one 3–7-step Plan Contract v2: the brain `implementation_plan.md` with requested feedback on App, or one workspace `docs/plans` file on CLI, never both. Contract v2 maps acceptance, steps, scope, and verification. Click **Proceed** (App) or run `/execute` (CLI). Completion requires fresh evidence after the final mutation.
 
 ### Development and release
 
@@ -131,7 +145,7 @@ Clone this repository anywhere on Windows and use that clone as the sole editabl
 
 ### Safety
 
-Deployment backs up only the exact Lite target and uses a staged App copy. Undeployment is dry-run by default and requires a matching managed marker. The plugin never requests automatic commits, pushes, dependency installation, destructive operations, hooks, telemetry, or agent orchestration.
+Deployment backs up only the exact target and uses a deterministic staged build. Undeployment is dry-run by default and requires a matching managed marker. Lite never installs hooks. The opt-in Strict profile packages documented Antigravity hooks to enforce write/scope/evidence boundaries; it remains disabled unless explicitly deployed. Neither profile requests automatic commits, pushes, telemetry, MCP, or agent orchestration.
 
 ## Provenance
 

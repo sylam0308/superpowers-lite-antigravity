@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { extractContract } from '../lib/contract.mjs';
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(testDir, '..');
@@ -85,10 +86,21 @@ const required = [
   'docs/UPSTREAM_AUDIT.md',
   'rules/proportional-workflow.md',
   'scripts/deploy.ps1',
+  'scripts/build-runtime.ps1',
   'scripts/verify-install.ps1',
   'scripts/undeploy.ps1',
   'tests/validate.mjs',
   'tests/run-behavior-tests.ps1',
+  'tests/lib/parse-stream.mjs',
+  'tests/lib/assertions.mjs',
+  'tests/lib/inspect-worktree.mjs',
+  'tests/schemas/final-report.schema.json',
+  'lib/contract.mjs',
+  'tests/fixtures/contracts/valid-plan.md',
+  'hooks/strict-gate.mjs',
+  'profiles/strict/hooks.template.json',
+  'docs/STRICT_PROFILE.md',
+  'tests/unit/strict-gate.test.mjs',
 ];
 for (const relative of required) read(relative);
 
@@ -122,24 +134,30 @@ if (/D:\\Antigravity Plugin/i.test(read('scripts/deploy.ps1'))) {
 
 const skillNames = ['plan', 'execute', 'debug', 'verify', 'review'];
 const runtimeFiles = [];
-let planSkill = '';
 for (const skillName of skillNames) {
   const relative = `skills/${skillName}/SKILL.md`;
   const content = parseFrontmatter(relative, skillName);
-  if (skillName === 'plan') planSkill = content;
   runtimeFiles.push({ relative, content });
 }
 
-for (const [label, pattern] of [
-  ['App brain surface lock', /\.gemini\/antigravity\/brain\//],
-  ['native question App lock', /native `ask_question` card/],
-  ['requested artifact feedback', /ArtifactMetadata\.RequestFeedback:\s*true/],
-  ['user-facing artifact metadata', /ArtifactMetadata\.UserFacing:\s*true/],
-  ['single-surface invariant', /Never produce both outputs/],
-  ['workspace-plan suppression on App', /Do not create, update, or mention any workspace `docs\/plans\/`/],
-  ['persistent-storage no-write gate', /There are no exceptions to this persistent-storage gate/],
-]) {
-  if (!pattern.test(planSkill)) fail(`skills/plan/SKILL.md: missing ${label}`);
+const contractFixture = read('tests/fixtures/contracts/valid-plan.md');
+const parsedContract = extractContract(contractFixture);
+if (parsedContract.legacy || parsedContract.errors.length) {
+  fail(`tests/fixtures/contracts/valid-plan.md: invalid Contract v2 (${parsedContract.errors.join('; ')})`);
+}
+
+try {
+  const hooksTemplate = JSON.parse(read('profiles/strict/hooks.template.json'));
+  const strict = hooksTemplate['superpowers-lite-strict'];
+  if (!strict || strict.enabled !== true || !Array.isArray(strict.PreToolUse) || !Array.isArray(strict.Stop)) {
+    fail('profiles/strict/hooks.template.json: missing enabled PreToolUse/Stop strict hook');
+  }
+  const commands = [strict.PreToolUse?.[0]?.hooks?.[0]?.command, strict.Stop?.[0]?.command];
+  if (commands.some((command) => command !== 'node hooks/strict-gate.mjs')) {
+    fail('profiles/strict/hooks.template.json: hooks must use the plugin-runtime relative command');
+  }
+} catch (error) {
+  fail(`profiles/strict/hooks.template.json: invalid JSON (${error.message})`);
 }
 
 const skillDirectories = fs.existsSync(path.join(root, 'skills'))
