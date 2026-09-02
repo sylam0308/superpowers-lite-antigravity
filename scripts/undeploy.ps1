@@ -12,6 +12,10 @@ $pluginId = 'superpowers-lite'
 $appPluginsRoot = Join-Path $env:USERPROFILE '.gemini\config\plugins'
 $appTarget = Join-Path $appPluginsRoot $pluginId
 $cliCandidate = Join-Path $env:USERPROFILE '.gemini\antigravity-cli\plugins\superpowers-lite'
+$scriptRoot = Split-Path -Parent $PSCommandPath
+$sourceRoot = [System.IO.Path]::GetFullPath((Join-Path $scriptRoot '..'))
+$workspaceRoot = [System.IO.Path]::GetFullPath((Join-Path $sourceRoot '..'))
+$backupRoot = [System.IO.Path]::GetFullPath((Join-Path $workspaceRoot '.deploy-backups'))
 
 function Get-ManagedMarker {
     param([Parameter(Mandatory)][string]$Target)
@@ -25,6 +29,39 @@ function Get-ManagedMarker {
         throw "Refusing marker for plugin '$($marker.pluginId)' at $Target"
     }
     return $marker
+}
+
+function Get-ValidatedAppBackup {
+    param($Marker)
+    if ($null -eq $Marker -or $null -eq $Marker.appBackup -or [string]::IsNullOrWhiteSpace([string]$Marker.appBackup)) { return $null }
+    if ($Marker.appBackup -isnot [string]) { throw 'Refusing non-scalar appBackup in managed marker.' }
+    $resolved = [System.IO.Path]::GetFullPath([string]$Marker.appBackup)
+    $relative = [System.IO.Path]::GetRelativePath($backupRoot, $resolved)
+    if ($relative -eq '..' -or $relative.StartsWith("..$([System.IO.Path]::DirectorySeparatorChar)") -or [System.IO.Path]::IsPathRooted($relative)) {
+        throw "Refusing App backup outside managed backup root: $resolved"
+    }
+    if ((Split-Path -Leaf $resolved) -ne $pluginId -or -not (Test-Path -LiteralPath $resolved -PathType Container)) {
+        throw "Managed App backup is missing or has an invalid target: $resolved"
+    }
+    return [string]$resolved
+}
+
+function Restore-AppBackup {
+    param([Parameter(Mandatory)][string]$Backup)
+    $stageName = ".$pluginId.restore-$([guid]::NewGuid().ToString('N'))"
+    $stage = Join-Path $appPluginsRoot $stageName
+    New-Item -ItemType Directory -Path $stage -Force | Out-Null
+    Get-ChildItem -LiteralPath $Backup -Force | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $stage -Recurse -Force
+    }
+    try {
+        if (Test-Path -LiteralPath $appTarget) { Remove-Item -LiteralPath $appTarget -Recurse -Force }
+        Move-Item -LiteralPath $stage -Destination $appTarget
+    }
+    catch {
+        throw "App restore failed. Recovery copy remains at '$stage'; source backup remains at '$Backup'. $($_.Exception.Message)"
+    }
+    Write-Output "Restored App backup: $Backup"
 }
 
 function Show-ManagedFiles {
@@ -78,6 +115,7 @@ if (-not $Apply) {
 }
 
 $appMarker = Get-ManagedMarker -Target $appTarget
+$appBackup = if ($Surface -in @('App', 'All')) { Get-ValidatedAppBackup -Marker $appMarker } else { $null }
 
 if ($Surface -in @('Cli', 'All')) {
     if (Test-CliRegistered) {
@@ -108,18 +146,11 @@ if ($Surface -in @('Cli', 'All')) {
 
 if ($Surface -in @('App', 'All')) {
     if ($null -ne $appMarker) {
-        $backup = $appMarker.appBackup
-        if (Test-Path -LiteralPath $appTarget) {
-            Remove-Item -LiteralPath $appTarget -Recurse -Force
-        }
-        if ($backup -and (Test-Path -LiteralPath $backup -PathType Container)) {
-            New-Item -ItemType Directory -Path $appTarget -Force | Out-Null
-            Get-ChildItem -LiteralPath $backup -Force | ForEach-Object {
-                Copy-Item -LiteralPath $_.FullName -Destination $appTarget -Recurse -Force
-            }
-            Write-Output "Restored App backup: $backup"
+        if ($appBackup) {
+            Restore-AppBackup -Backup $appBackup
         }
         else {
+            if (Test-Path -LiteralPath $appTarget) { Remove-Item -LiteralPath $appTarget -Recurse -Force }
             Write-Output 'Removed managed App plugin; no previous App target was recorded.'
         }
     }

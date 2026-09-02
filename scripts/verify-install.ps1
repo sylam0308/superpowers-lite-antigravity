@@ -42,11 +42,37 @@ function Assert-Runtime {
         $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($hash -ne $item.sha256) { $changed += $item.path }
     }
+    $diskMap = @{}
+    $rootBase = [System.IO.Path]::GetFullPath($Root).TrimEnd('\')
+    Get-ChildItem -LiteralPath $Root -Recurse -File -Force | Where-Object {
+        $_.Name -notin @('.superpowers-lite-checksums.json', '.superpowers-lite-managed.json')
+    } | ForEach-Object {
+        $relative = $_.FullName.Substring($rootBase.Length + 1).Replace('\', '/')
+        $diskMap[$relative] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    $missing += @($expectedMap.Keys | Where-Object { -not $diskMap.ContainsKey($_) })
+    $extra += @($diskMap.Keys | Where-Object { -not $expectedMap.ContainsKey($_) })
+    $changed += @($expectedMap.Keys | Where-Object { $diskMap.ContainsKey($_) -and $diskMap[$_] -ne $expectedMap[$_] })
+    if ($Profile -eq 'Lite' -and ((Test-Path -LiteralPath (Join-Path $Root 'hooks.json')) -or (Test-Path -LiteralPath (Join-Path $Root 'hooks') -PathType Container))) {
+        $extra += 'Strict hook files present in Lite runtime'
+    }
+    if ($Profile -eq 'Strict' -and (-not (Test-Path -LiteralPath (Join-Path $Root 'hooks.json') -PathType Leaf) -or -not (Test-Path -LiteralPath (Join-Path $Root 'hooks\strict-gate.mjs') -PathType Leaf))) {
+        $missing += 'Strict hook files'
+    }
+    $missing = @($missing | Sort-Object -Unique)
+    $extra = @($extra | Sort-Object -Unique)
+    $changed = @($changed | Sort-Object -Unique)
     if ($missing.Count -or $extra.Count -or $changed.Count) {
         throw "$Label runtime drift. Missing=[$($missing -join ', ')]; Extra=[$($extra -join ', ')]; Changed=[$($changed -join ', ')]"
     }
     $markerPath = Join-Path $Root '.superpowers-lite-managed.json'
     if ($Label -ne 'Source build' -and -not (Test-Path -LiteralPath $markerPath -PathType Leaf)) { throw "$Label managed marker is missing." }
+    if ($Label -ne 'Source build') {
+        $marker = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
+        if ($marker.name -ne $pluginId -or $marker.pluginId -ne $pluginId) { throw "$Label managed marker plugin identity is invalid." }
+        if ($marker.version -ne $manifest.version) { throw "$Label managed marker version mismatch." }
+        if ($marker.profile -ne $Profile) { throw "$Label managed marker profile mismatch." }
+    }
     [pscustomobject]@{ Surface = $Label; Version = $manifest.version; Profile = $Profile; Files = $actual.files.Count; Status = 'MATCH'; Path = $Root }
 }
 

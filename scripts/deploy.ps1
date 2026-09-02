@@ -38,8 +38,7 @@ function Backup-Directory {
     if (-not (Test-Path -LiteralPath $Target -PathType Container)) { return $null }
     $destination = Join-Path $backupRoot "$Label\$pluginId"
     Copy-DirectoryContents -From $Target -To $destination
-    Write-Output "Backed up $Label target to $destination"
-    return $destination
+    return [string]$destination
 }
 
 function Backup-CliState {
@@ -70,6 +69,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Custom validator failed.' }
 if ($LASTEXITCODE -ne 0) { throw 'Source plugin validation failed.' }
 
 $appBackup = Backup-Directory -Target $appTarget -Label 'App'
+if ($appBackup) { Write-Output "Backed up App target to $appBackup" }
 $cliStateBackup = if ($Surface -in @('Cli', 'All')) { Backup-CliState } else { $null }
 New-Item -ItemType Directory -Path $stagingRoot -Force | Out-Null
 
@@ -80,6 +80,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Built runtime validation failed.' }
 
     $marker = [ordered]@{
+        name = $pluginId
         pluginId = $pluginId
         version = $manifest.version
         profile = $Profile
