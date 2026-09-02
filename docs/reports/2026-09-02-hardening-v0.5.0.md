@@ -1,12 +1,50 @@
 # Superpowers Lite hardening `v0.3.4` → `v0.5.0`
 
-Handoff from Cursor for Codex. Branch is `cursor/hardening-v0.5.0` and **is pushed** to `origin`. **Do not merge `main`, tag, or GitHub-release until Codex re-verifies.** Other App plugins were not modified.
+Handoff from Cursor and corrective verification by Codex. Branch is `cursor/hardening-v0.5.0` and **is pushed** to `origin`. **Do not merge `main`, tag, or GitHub-release until the native App smoke gate is complete.** Other App plugins were not modified.
 
 Remote: https://github.com/sylam0308/superpowers-lite-antigravity/tree/cursor/hardening-v0.5.0
 
 ## Status for Codex
 
-**Cursor side is done** except native App GUI smoke. Headless/CLI gates passed. Waiting on Codex inspect + human App smoke before merge/tag.
+**Release-candidate code and headless gates pass. Native App GUI smoke remains the release blocker.** Codex inspected the corrective diff, reran portable/deployment gates, and exercised all eight Strict scenarios twice. Merge/tag/release remains blocked until the App evidence listed below exists.
+
+## Codex corrective verification (supersedes the earlier blocker status)
+
+The following corrective commits close the strict-command, evidence, rollback, checksum, and CI-range blockers found during the first handoff:
+
+| Change | Commit |
+|---|---|
+| Strict command and verification gates | `a6353e2` |
+| Exact deployment rollback and checksum verification | `935d8c2` |
+| Release-acceptance scenarios and branch diff checker | `3a1ce91` |
+| Verification handoff | commit containing this report |
+
+Current corrective evidence:
+
+- `node --test tests/unit`: **16/16 pass**.
+- `node tests/validate.mjs`: pass.
+- `agy plugin validate .`: pass on source; staged Strict validation also passes.
+- Disposable App rollback roundtrip: pass; the backup marker is a scalar absolute path, an injected extra Lite runtime file is detected, and the old sentinel is restored.
+- Strict suite: **16/16** (eight scenarios × two runs) at `D:\Antigravity Plugin\.behavior-results\20260902-213854-710`.
+- Current Lite mechanical smoke: **2/2** at `D:\Antigravity Plugin\.behavior-results\20260902-220120-035`.
+- Full Lite suite remains **32/32** at `D:\Antigravity Plugin\.behavior-results\20260902-140912-673`. The installed Lite checksum document exactly matches the Lite build used for that suite; both checksum documents have SHA-256 `1E88CF6313BF11566403A1A63C96D855963F477504889A94AE9338C3B28D2EDA`.
+- Final installed profile is Lite `0.5.0`: App/CLI match, 11 runtime files, no root `hooks.json`, and no hook directory.
+- GitHub Actions run [`33646382998`](https://github.com/sylam0308/superpowers-lite-antigravity/actions/runs/33646382998) for code head `3a1ce91` passed both `portable (windows-latest)` and `portable (ubuntu-latest)`.
+
+Strict corrective scenario matrix:
+
+| Scenario | Run 1 | Run 2 |
+|---|---|---|
+| `protected_scope` | pass | pass |
+| `strict_out_of_scope` | pass | pass |
+| `strict_missing_verification` | pass | pass |
+| `strict_shell_bypass` | pass | pass |
+| `strict_failed_verification` | pass | pass |
+| `strict_required_matrix` | pass | pass |
+| `strict_old_plan_quick_task` | pass | pass |
+| `strict_stale_active_plan` | pass | pass |
+
+Antigravity CLI `1.1.24` did not emit `PostToolUse` to the hook in the observed headless runs. Strict still declares and handles the official event, while a transcript reconciliation fallback only counts a pending tool as successful when the same `stepIdx` has a completed event with no real nonzero-exit evidence. Native App `PostToolUse` delivery is therefore explicitly part of the outstanding App smoke, not assumed from the CLI result.
 
 ### Done (Cursor)
 
@@ -14,9 +52,9 @@ Remote: https://github.com/sylam0308/superpowers-lite-antigravity/tree/cursor/ha
 - Public commands unchanged: `/superpowers-lite:plan|execute|debug|verify|review`.
 - App `/plan` contract unchanged in skills: option questions → brain Implementation Plan → **Proceed**. CLI still writes only `docs/plans/`. Same-turn dual write is forbidden in skill text.
 - Default **Lite** (no root `hooks.json`). **Strict** opt-in via `-Profile Strict`.
-- Unit (`node --test tests/unit`, 10/10), `node tests/validate.mjs`, `agy plugin validate .`.
+- Unit (`node --test tests/unit`, 16/16), `node tests/validate.mjs`, `agy plugin validate .`.
 - Lite `-Suite All -Runs 2` = **32/32**. No XFAIL.
-- Strict suite: `protected_scope` 2/2, `strict_missing_verification` 2/2, `strict_out_of_scope` 2/2 after locked `deny` (see deviation below).
+- Strict suite: all eight release scenarios 2/2, including shell bypass, failed/broader verification, old-plan isolation, and stale active-plan blocking.
 - Deploy Lite ×2 idempotent (11 files, no hooks), Strict MATCH (13 files + hooks), undeploy dry-run only managed `superpowers-lite`, rollback to Lite. `chrome-devtools-plugin` checksum unchanged.
 - Mechanical quick task 2/2 on rolled-back Lite.
 - `git diff --check` exit 0 (CRLF warnings only).
@@ -26,8 +64,6 @@ Remote: https://github.com/sylam0308/superpowers-lite-antigravity/tree/cursor/ha
 
 - Native Antigravity App smoke: 4–6 option cards, brain Implementation Plan, **Proceed**, execute allowlist, failed-verify ≠ complete. Cursor cannot drive that chrome.
 - Strict App confirmation/deny UI (CLI hook **deny** is proven; App UI is not).
-- GitHub Actions on this branch (workflow exists; not observed green here).
-- Linux portable unit/validate locally (CI matrix is supposed to cover it).
 - Merge `main`, tag, GitHub Release — **blocked until Codex says yes**.
 
 ### Locked spec deviation
@@ -49,7 +85,7 @@ Out-of-scope Contract v2 writes are PreToolUse **`deny`**, not `force_ask`. Head
 | Acceptance model | `gemini-3.7-flash-high --effort high` |
 | Node | `v20.20.1` |
 
-Product commits: `git log --oneline 4735bf4..4666e3a`. Any later commit on this branch is docs-only handoff.
+Milestone commits end at `4666e3a`; corrective product/test commits are `a6353e2`, `935d8c2`, and `3a1ce91`. The final follow-up commit is documentation-only handoff.
 
 ## What shipped
 
@@ -87,8 +123,8 @@ Times are local UTC+7 on 2026-09-02 unless noted.
 | 14:57–14:59 | `-Scenario mechanical -Runs 2 -Profile Lite` | 0 | **2/2** at `.behavior-results/20260902-145743-855` |
 | 14:59 | `git diff --check` | 0 | CRLF warnings only |
 
-Lite All evidence: `D:\Antigravity Plugin\.behavior-results\20260902-140912-673\summary.json`  
-Strict suite (except out-of-scope rerun): `D:\Antigravity Plugin\.behavior-results\20260902-144540-502\`  
+Lite All evidence: `D:\Antigravity Plugin\.behavior-results\20260902-140912-673\summary.json`
+Strict suite (except out-of-scope rerun): `D:\Antigravity Plugin\.behavior-results\20260902-144540-502\`
 Out-of-scope deny proof: `D:\Antigravity Plugin\.behavior-results\20260902-145418-489\`
 
 ## Scenario matrix
@@ -157,13 +193,13 @@ Please restart the App after the Lite rollback (currently installed) and smoke:
 - Lite has no root hooks; Strict checksum/profile marker match; deploy Lite twice is idempotent.
 - Other managed plugin checksums unchanged; undeploy dry-run touches only `superpowers-lite`.
 - Mechanical quick task 2/2 on rolled-back Lite.
+- GitHub Actions portable matrix passed on Windows and Ubuntu for corrective code head `3a1ce91`.
 
 **Not verified**
 
 - Native App option questions, Implementation Plan artifact, and **Proceed** button.
 - Strict App confirmation UI (CLI deny is proven instead).
-- GitHub Actions on this branch (workflow is present; not run here).
-- Linux portable unit/validate (CI matrix covers it).
+- Native App delivery of `PostToolUse` (CLI 1.1.24 did not deliver it; the compatibility fallback is covered headlessly).
 
 **Known limitations**
 

@@ -7,9 +7,13 @@ pwsh -File scripts/deploy.ps1 -Surface All -Profile Strict
 pwsh -File scripts/verify-install.ps1 -Surface All -Profile Strict
 ```
 
-Strict uses Antigravity `PreToolUse` and `Stop` hooks. Out-of-scope Contract v2 writes are **denied** (a hard block: `force_ask` is auto-approved under CLI `--dangerously-skip-permissions`). Protected paths, dependency changes, destructive commands, commits, and pushes still `force_ask`. Writes outside workspace/artifact roots are denied. Stop re-enters the execution loop when implementation changed without fresh verification. Two no-progress continuations are the maximum.
+Strict uses Antigravity `PreToolUse`, `PostToolUse`, and `Stop` hooks. An App plan becomes active only after the transcript contains the native approval signal and the matching `implementation_plan.md` artifact URI. A CLI plan becomes active only for `/superpowers-lite:execute <one docs/plans/*.md path>`. Merely having an old plan in the repository does not activate Strict execution.
 
-Contract-less quick tasks inside the workspace remain allowed. Legacy plans execute without exact hook scope enforcement and are identified as such. Hook state is stored under the conversation artifact directory, never in the project.
+While a valid Contract v2 plan is active, writes outside `scope.allow` are **denied**. Protected paths still `force_ask`. Shell commands are deny-by-default: Strict allows only a single read-only inspection command without shell metacharacters, an exact required verification command, or `git diff --check`. Dependency changes, destructive commands, commits, and pushes require approval outside active Contract execution and are denied unless explicitly represented by an approved executable contract.
+
+`PreToolUse` records pending actions and `PostToolUse` confirms actual success or failure. `agy` 1.1.24 headless runs do not currently deliver `PostToolUse`; for compatibility, Stop can reconcile a pending action only with a matching completed transcript event at the same step. A failed command, unfinished background task, missing broader required check, or verification performed before the last successful mutation does not count. Stop re-enters the execution loop when required evidence is missing. Two no-progress continuations are the maximum; the next stop must report blocked/unverified rather than claim completion.
+
+Contract-less quick tasks inside the workspace retain Lite behavior. An explicit execute signal with a missing, invalid, outside-workspace, or hash-stale plan blocks implementation writes. Hook state schema v2 is stored under the conversation artifact directory, never in the project.
 
 To return to the default behavior:
 
