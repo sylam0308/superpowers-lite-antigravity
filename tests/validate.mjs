@@ -102,24 +102,44 @@ try {
 
 if (manifest) {
   if (manifest.name !== 'superpowers-lite') fail('plugin.json: name must be superpowers-lite');
-  if (manifest.version !== '0.1.0') fail('plugin.json: initial version must be 0.1.0');
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(manifest.version ?? '')) {
     fail('plugin.json: version must be semantic version syntax');
   }
   if (typeof manifest.description !== 'string' || manifest.description.length < 40) {
     fail('plugin.json: description is missing or too short');
   }
-  for (const forbiddenKey of ['hooks', 'mcpServers', 'commands', 'telemetry']) {
-    if (Object.hasOwn(manifest, forbiddenKey)) fail(`plugin.json: ${forbiddenKey} is excluded from 0.1.0`);
+  if (manifest.repository !== 'https://github.com/sylam0308/superpowers-lite-antigravity.git') {
+    fail('plugin.json: repository must point to the public GitHub source');
   }
+  for (const forbiddenKey of ['hooks', 'mcpServers', 'commands', 'telemetry']) {
+    if (Object.hasOwn(manifest, forbiddenKey)) fail(`plugin.json: ${forbiddenKey} is excluded from this plugin`);
+  }
+}
+
+if (/D:\\Antigravity Plugin/i.test(read('scripts/deploy.ps1'))) {
+  fail('scripts/deploy.ps1: source path must remain portable');
 }
 
 const skillNames = ['plan', 'execute', 'debug', 'verify', 'review'];
 const runtimeFiles = [];
+let planSkill = '';
 for (const skillName of skillNames) {
   const relative = `skills/${skillName}/SKILL.md`;
   const content = parseFrontmatter(relative, skillName);
+  if (skillName === 'plan') planSkill = content;
   runtimeFiles.push({ relative, content });
+}
+
+for (const [label, pattern] of [
+  ['App brain surface lock', /\.gemini\/antigravity\/brain\//],
+  ['native question App lock', /native `ask_question` card/],
+  ['requested artifact feedback', /ArtifactMetadata\.RequestFeedback:\s*true/],
+  ['user-facing artifact metadata', /ArtifactMetadata\.UserFacing:\s*true/],
+  ['single-surface invariant', /Never produce both outputs/],
+  ['workspace-plan suppression on App', /Do not create, update, or mention any workspace `docs\/plans\/`/],
+  ['persistent-storage no-write gate', /There are no exceptions to this persistent-storage gate/],
+]) {
+  if (!pattern.test(planSkill)) fail(`skills/plan/SKILL.md: missing ${label}`);
 }
 
 const skillDirectories = fs.existsSync(path.join(root, 'skills'))

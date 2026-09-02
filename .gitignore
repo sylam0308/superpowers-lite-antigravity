@@ -1,4 +1,16 @@
+# Local deployment and behavior-test outputs
+.deploy-backups/
+.deploy-staging/
 .behavior-results/
+.app-smoke/
+
+# Local handoff notes and editor state
+docs/*handoff*.md
+.vscode/
+.idea/
+
+# Common generated files
+node_modules/
 *.log
 .DS_Store
 Thumbs.db

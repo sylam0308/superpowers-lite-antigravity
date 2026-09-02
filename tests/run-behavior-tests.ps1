@@ -137,12 +137,14 @@ function Assert-Scenario {
                 $stepCount = ([regex]::Matches($planText, '(?m)^- \[ \] \d+\.')).Count
                 Add-Check 'Plan has 3-7 checkbox steps' ($stepCount -ge 3 -and $stepCount -le 7) "steps=$stepCount"
                 Add-Check 'Plan names files and verification' ($planText -match 'src/accounts\.mjs' -and $planText -match 'tests/accounts\.test\.mjs' -and $planText -match 'node --test') 'paths and command inspected'
+                Add-Check 'Plan has a file map' ($planText -match '(?i)(file map|create:|modify:)') 'file map inspected'
+                Add-Check 'Steps include Files, Behavior, and Check' ($planText -match '(?i)files:' -and $planText -match '(?i)behavior:' -and $planText -match '(?i)check:') 'step fields inspected'
             }
         }
         'ambiguous_architecture' {
             $questionCount = ([regex]::Matches($Text, '\?')).Count
             Add-Check 'No repository edits' ($changed.Count -eq 0) ($changed -join ', ')
-            Add-Check 'One clarification round with at most two questions' ($questionCount -ge 1 -and $questionCount -le 2) "questionMarks=$questionCount"
+            Add-Check 'One clarification round with four to six questions' ($questionCount -ge 4 -and $questionCount -le 6) "questionMarks=$questionCount"
         }
         'execute_plan' {
             $allowed = @('src/greeting.mjs', 'tests/greeting.test.mjs', 'docs/plans/2026-09-01-formal-greeting.md')
@@ -150,6 +152,7 @@ function Assert-Scenario {
             $planText = Get-Content -LiteralPath (Join-Path $CaseRoot 'docs\plans\2026-09-01-formal-greeting.md') -Raw
             $openSteps = ([regex]::Matches($planText, '(?m)^- \[ \] \d+\.')).Count
             Add-Check 'Plan step checklist updated' ($openSteps -eq 0) "openSteps=$openSteps"
+            Add-Check 'No open checkboxes remain' (-not ($planText -match '(?m)^- \[ \]')) 'open checkbox scan'
             $test = Run-NodeTests -Path $CaseRoot
             Add-Check 'Behavior tests pass' ($test.ExitCode -eq 0) $test.Output.Trim()
         }

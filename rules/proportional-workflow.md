@@ -27,3 +27,7 @@ Never say a change works or is complete without fresh verification output from t
 ## Load workflows only when useful
 
 Use the dedicated `plan`, `execute`, `debug`, `verify`, or `review` skill when the user invokes it or the task clearly needs that workflow. Do not preload the whole skill library. Planning is appropriate for multi-file or risky work with meaningful sequencing; debugging is appropriate when the cause is unknown; review is appropriate when evaluating a diff. TDD is useful when an existing test harness can express the behavior or a bug needs a regression test, but it is not a ceremony for mechanical edits.
+
+## Planning intake
+
+When the user invokes `/plan`, `/superpowers-lite:plan`, or asks for an implementation plan, follow the `plan` skill. A brain path or plan mode never bypasses intake. If persistent storage is requested without a named backend, writing any plan or artifact is forbidden: inspect, ask four to six option questions, and stop. Otherwise, if the user message does not already name a `dir/file.ext` path plus a vendor or an exact behavior plus a check, ask the same intake first. Folder names and files found during inspection are not the user's chosen scope. After native `ask_question`, lock to the App surface: write only the brain `implementation_plan.md` with `RequestFeedback` and never a workspace plan in that turn. In `agy`/print mode, write only `docs/plans/`. Never produce both.

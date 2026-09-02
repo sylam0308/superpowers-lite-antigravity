@@ -8,7 +8,6 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $pluginId = 'superpowers-lite'
-$expectedSource = [System.IO.Path]::GetFullPath('D:\Antigravity Plugin\superpowers-lite')
 $scriptRoot = Split-Path -Parent $PSCommandPath
 $sourceRoot = [System.IO.Path]::GetFullPath((Join-Path $scriptRoot '..'))
 $workspaceRoot = [System.IO.Path]::GetFullPath((Join-Path $sourceRoot '..'))
@@ -99,9 +98,6 @@ function Backup-CliState {
     return $null
 }
 
-if ($sourceRoot.TrimEnd('\') -ne $expectedSource.TrimEnd('\')) {
-    throw "Source must be exactly $expectedSource; found $sourceRoot"
-}
 Assert-ExactChildPath -Target $appTarget -Parent $appPluginsRoot -ExpectedName $pluginId
 
 $manifest = Get-Content -LiteralPath (Join-Path $sourceRoot 'plugin.json') -Raw | ConvertFrom-Json
@@ -146,7 +142,7 @@ $checksumDocument | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Pat
 $marker = [ordered]@{
     pluginId = $pluginId
     version = $manifest.version
-    managedBy = 'D:\Antigravity Plugin\superpowers-lite\scripts\deploy.ps1'
+    managedBy = $PSCommandPath
     source = $sourceRoot
     deployedAt = (Get-Date).ToUniversalTime().ToString('o')
     appBackup = $appBackup

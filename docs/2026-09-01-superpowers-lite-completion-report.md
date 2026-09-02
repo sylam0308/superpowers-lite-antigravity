@@ -1,11 +1,11 @@
-# Báo cáo hoàn thành Superpowers Lite 0.1.0
+# Báo cáo kiểm thử Superpowers Lite 0.1.0–0.3.4
+
+Các bản 0.3.x bổ sung intake 4–6 câu, App artifact + Proceed, CLI ghi `docs/plans/`, và surface lock ngăn App ghi đồng thời workspace plan.
 
 - **Ngày:** 2026-09-01
-- **Workspace:** `D:\Antigravity Plugin`
-- **Plugin:** `superpowers-lite` 0.1.0
+- **Workspace:** local development workspace (paths are machine-specific)
+- **Plugin:** `superpowers-lite` 0.3.4
 - **Model acceptance:** Gemini 3.7 Flash High
-- **Conversation Codex:** [Hướng dẫn dùng Antigravity App](https://chatgpt.com/s/cx_6a96e8e6d70c8191bcbd604e56e5e7a2)
-- **Phiên tiếp:** Cursor hoàn tất phần App smoke dang dở và khóa tiêu chí trong `IMPLEMENTATION_PLAN.md`
 
 ## Kết luận
 
@@ -41,7 +41,7 @@ Không điều khiển lại GUI Antigravity. Codex đã gặp hazard gõ nhầm
 ## Kiến trúc đã ship
 
 ```text
-D:\Antigravity Plugin\
+<workspace>\
 ├─ IMPLEMENTATION_PLAN.md
 ├─ Superpowers-Lite.code-workspace
 ├─ docs\2026-09-01-superpowers-lite-completion-report.md   ← file này
@@ -114,7 +114,7 @@ Sửa:
 
 ## App smoke
 
-Project disposable: `D:\Antigravity Plugin\.app-smoke\qa-project` (git baseline `App smoke fixture baseline`).
+Project disposable: `<workspace>\.app-smoke\qa-project` (git baseline `App smoke fixture baseline`).
 
 ### Đã làm trên Antigravity App (Codex, evidence filesystem)
 
@@ -156,7 +156,7 @@ Với verify, mở đúng folder `verify_failure` (hoặc copy fixture đó) đ�
 Source chỉ sửa trên D:, rồi:
 
 ```powershell
-Set-Location 'D:\Antigravity Plugin\superpowers-lite'
+Set-Location '<path-to-clone>'
 node tests\validate.mjs
 agy plugin validate .
 pwsh -File scripts\deploy.ps1 -Surface All
@@ -176,10 +176,8 @@ Typo / config cục bộ: **không** cần slash command.
 
 Rollback xem trước: `pwsh -File scripts\undeploy.ps1` (cần `-Apply` mới gỡ).
 
-## Việc cố ý chưa làm (đúng plan)
+## Phạm vi cố ý không thêm
 
-- Không tạo Git remote / không push GitHub.
-- Repo `superpowers-lite` đã `git init` nhưng **chưa có commit**. Có thể commit khi bạn yêu cầu.
 - Không thêm MCP, hook, HUD, subagent, auto-commit.
 - Không fork/cắt nguyên Superpowers; attribution trong `THIRD_PARTY_NOTICES.md` và `docs/UPSTREAM_AUDIT.md`.
 
@@ -188,6 +186,15 @@ Rollback xem trước: `pwsh -File scripts\undeploy.ps1` (cần `-Apply` mới g
 1. Flash vẫn có thể “liều” trên conversation lẻ (lượt ambiguous từng 1/2 trước khi siết gate). Gate hiện chặn được 2/2, nhưng không biến Flash thành model mạnh hơn.
 2. App GUI smoke debug/verify chưa lặp lại bằng Computer Use. Runtime và prompt thì đã verify.
 3. `agy plugin list` hiện chỉ import `superpowers-lite`. Plugin App còn lại trên disk là `chrome-devtools-plugin`; không bị script Lite liệt kê khi undeploy.
+
+## Bổ sung 0.3.4 — native Plan review đã smoke xong
+
+- Static validation và `git diff --check`: pass.
+- CLI batch `20260902-113831-306`: `ambiguous_architecture` **2/2** với Gemini 3.7 Flash High.
+- App conversation mới: 5 native option questions → brain Implementation Plan → **Proceed**; chưa bấm Proceed và không sửa workspace.
+- Artifact metadata: `requestFeedback: true`, `userFacing: true`.
+- Deploy hai lần idempotent; Source/App/CLI `0.3.4`, 10 runtime files, checksum match.
+- Undeploy dry-run chỉ nhắm managed target `superpowers-lite`.
 
 ## File evidence chính
 
