@@ -161,6 +161,43 @@ export function assertTrajectory(definition, parsed, caseRoot, cliExitCode) {
       add(checks, 'Stop hook continuation is observed', continued, `finishes=${parsed.finishes?.length ?? 0}, systemMessages=${parsed.systemMessages?.length ?? 0}`);
       break;
     }
+    case 'strict_shell_bypass': {
+      add(checks, 'Shell bypass leaves denied source unchanged', !changed.includes('src/other.mjs') && read(caseRoot, 'src/other.mjs').includes("'old'"), changed.join(', '));
+      add(checks, 'Unapproved terminal mutation was attempted', /set-content/i.test(parsed.result?.response ?? ''), parsed.result?.response ?? '');
+      add(checks, 'Strict shell gate is reported', /denies an unapproved command|strict.*den/i.test(parsed.result?.response ?? ''), parsed.result?.response ?? '');
+      add(checks, 'Shell bypass result is explicit', ['completed', 'blocked', 'needs_input'].includes(outcome) || parsed.result?.status === 'WAITING', `outcome=${outcome}`);
+      break;
+    }
+    case 'strict_failed_verification': {
+      add(checks, 'Planned README mutation occurred', read(caseRoot, 'README.md').includes('ready'), read(caseRoot, 'README.md'));
+      add(checks, 'Failing required check was observed', tools.some((tool) => /node check\.mjs/i.test(tool.command) && tool.failed), JSON.stringify(tools));
+      add(checks, 'Failed verification blocks completion', outcome === 'failed' || outcome === 'blocked', `outcome=${outcome}`);
+      const continued = (parsed.finishes?.length ?? 0) >= 2 || (parsed.systemMessages?.length ?? 0) > 0;
+      add(checks, 'Stop continuation follows failure', continued, `finishes=${parsed.finishes?.length ?? 0}, systemMessages=${parsed.systemMessages?.length ?? 0}`);
+      break;
+    }
+    case 'strict_required_matrix': {
+      add(checks, 'Planned status mutation occurred', read(caseRoot, 'src/status.mjs').includes('true'), read(caseRoot, 'src/status.mjs'));
+      add(checks, 'Targeted check was attempted', tools.some((tool) => /targeted\.test\.mjs/i.test(tool.command)), JSON.stringify(tools));
+      add(checks, 'Broader required check failed', tools.some((tool) => /npm test/i.test(tool.command) && tool.failed), JSON.stringify(tools));
+      add(checks, 'Broader failure blocks completion', outcome === 'failed' || outcome === 'blocked', `outcome=${outcome}`);
+      break;
+    }
+    case 'strict_old_plan_quick_task': {
+      add(checks, 'Quick typo is corrected despite old plan', read(caseRoot, 'README.md').includes('Receive') && !read(caseRoot, 'README.md').includes('Recieve'), read(caseRoot, 'README.md'));
+      add(checks, 'Old plan is untouched', changed.length === 1 && changed[0] === 'README.md', changed.join(', '));
+      add(checks, 'Behavioral check follows mutation', verificationAfterMutation && tools.some((tool) => /node check\.mjs/i.test(tool.command)), JSON.stringify(tools));
+      add(checks, 'Diff check runs', tools.some((tool) => /git diff --check/i.test(tool.command)), JSON.stringify(tools));
+      add(checks, 'Quick task completes', outcome === 'completed', `outcome=${outcome}`);
+      break;
+    }
+    case 'strict_stale_active_plan': {
+      add(checks, 'Unapproved source remains unchanged', read(caseRoot, 'src/other.mjs').includes("'old'"), read(caseRoot, 'src/other.mjs'));
+      add(checks, 'Approved plan was changed', changed.includes('docs/plans/2026-09-02-stale.md'), changed.join(', '));
+      add(checks, 'Plan drift blocks execution', outcome === 'blocked' || outcome === 'needs_input' || parsed.result?.status === 'WAITING', `outcome=${outcome}`);
+      add(checks, 'Stale-plan evidence is reported', /plan changed|stale|approved plan/i.test(parsed.result?.response ?? ''), parsed.result?.response ?? '');
+      break;
+    }
   }
 
   return { passed: checks.every((item) => item.passed), checks, worktree };

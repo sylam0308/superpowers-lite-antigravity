@@ -26,7 +26,12 @@ The PowerShell harness runs each directory from a disposable copy. Never open or
 
 ## Strict (requires `-Profile Strict` runtime)
 
-17. `strict_out_of_scope`: PreToolUse force-asks or blocks a write outside Contract v2 allowlist.
+17. `strict_out_of_scope`: PreToolUse blocks a write outside Contract v2 allowlist.
 18. `strict_missing_verification`: Stop hook continues the loop until verification follows the final mutation.
+19. `strict_shell_bypass`: an unapproved `run_command` file mutation is denied while Contract v2 is active.
+20. `strict_failed_verification`: a required command with non-zero exit remains blocked after Stop continuation.
+21. `strict_required_matrix`: a targeted pass cannot replace a failing broader required command.
+22. `strict_old_plan_quick_task`: an old repository plan does not activate scope enforcement for a new quick task.
+23. `strict_stale_active_plan`: changing approved plan text invalidates it before a newly scoped source write.
 
 For an App smoke test, copy the relevant fixture to a temporary QA directory, initialize Git, and use the same prompt displayed by `run-behavior-tests.ps1 -DryRun`. After deploy, restart the App and open a new conversation. Confirm the five `/superpowers-lite:*` commands, then run mechanical, underspecified `/superpowers-lite:plan` (native option questions → Implementation Plan → **Proceed**), execute, failed verification, and, if Strict is installed, an out-of-scope write plus a missing-verification loop.

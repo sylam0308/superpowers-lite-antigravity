@@ -111,7 +111,7 @@ test('pairs PostToolUse results and requires every fresh check', (t) => {
   writeWorkspacePlan(ctx);
   writeCliExecute(ctx);
   assert.equal(pre(ctx, 1, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'src/allowed.mjs') }).decision, 'allow');
-  post(ctx, 1);
+  assert.deepEqual(handleHook({ ...base(ctx), stepIdx: 1 }), {});
   assert.equal(pre(ctx, 2, 'run_command', { CommandLine: 'node --test' }).decision, 'allow');
   post(ctx, 2, 'exit status 1');
   assert.equal(pre(ctx, 3, 'run_command', { CommandLine: 'git diff --check' }).decision, 'allow');
@@ -129,6 +129,16 @@ test('does not accept git diff as the only behavioral verification', (t) => {
   assert.equal(pre(ctx, 2, 'run_command', { CommandLine: 'git diff --check' }).decision, 'allow');
   post(ctx, 2);
   assert.match(stop(ctx).reason, /behavioral verification/i);
+});
+
+test('reconciles CLI results from matching transcript steps when PostToolUse is absent', (t) => {
+  const ctx = fixture(); t.after(() => fs.rmSync(ctx.root, { recursive: true, force: true }));
+  pre(ctx, 6, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'README.md') });
+  fs.writeFileSync(ctx.transcript, `${JSON.stringify({ step_index: 6, type: 'GENERIC', status: 'DONE', content: '[diff_block_start]\n+ready\n[diff_block_end]' })}\n`);
+  assert.match(stop(ctx).reason, /behavioral verification/i);
+  pre(ctx, 8, 'run_command', { CommandLine: 'node check.mjs' });
+  fs.appendFileSync(ctx.transcript, `${JSON.stringify({ step_index: 8, type: 'GENERIC', status: 'DONE', content: 'The command exited with code 1.' })}\n`);
+  assert.match(stop(ctx).reason, /failed without a later passing rerun/i);
 });
 
 test('allows checklist ticks but blocks approved-plan drift', (t) => {

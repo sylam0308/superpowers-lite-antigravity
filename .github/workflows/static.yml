@@ -15,9 +15,15 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
       - run: node --test tests/unit
       - run: node tests/validate.mjs
-      - run: git diff --check
+      - name: Check whitespace introduced by this push or pull request
+        env:
+          DIFF_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          DIFF_HEAD: ${{ github.sha }}
+        run: node tests/check-diff.mjs

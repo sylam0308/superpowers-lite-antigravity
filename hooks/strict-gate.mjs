@@ -269,17 +269,39 @@ function postToolUse(input) {
   if (!pending) return {};
   delete loaded.state.pendingTools[key];
   const success = !String(input.error ?? '').trim();
-  const event = { ...pending, stepIdx: input.stepIdx, success, error: String(input.error ?? '') };
-  if (pending.kind === 'mutation' && success) loaded.state.mutations.push(event);
-  if (pending.kind === 'verification') loaded.state.verifications.push(event);
-  if (pending.kind === 'control' && success && loaded.state.activePlan) {
-    try {
-      const markdown = fs.readFileSync(loaded.state.activePlan.path, 'utf8');
-      if (normalizedPlanHash(markdown) !== loaded.state.activePlan.approvalHash) loaded.state.activationError = 'approved plan changed after activation';
-    } catch (error) { loaded.state.activationError = `active plan is unreadable: ${error.message}`; }
-  }
+  applyCompletedEvent(loaded.state, pending, input.stepIdx, success, String(input.error ?? ''));
   saveState(loaded.file, loaded.state);
   return {};
+}
+
+function applyCompletedEvent(state, pending, stepIdx, success, error) {
+  const event = { ...pending, stepIdx, success, error };
+  if (pending.kind === 'mutation' && success) state.mutations.push(event);
+  if (pending.kind === 'verification') state.verifications.push(event);
+  if (pending.kind === 'control' && success && state.activePlan) {
+    try {
+      const markdown = fs.readFileSync(state.activePlan.path, 'utf8');
+      if (normalizedPlanHash(markdown) !== state.activePlan.approvalHash) state.activationError = 'approved plan changed after activation';
+    } catch (readError) { state.activationError = `active plan is unreadable: ${readError.message}`; }
+  }
+}
+
+function reconcilePendingFromTranscript(loaded, input) {
+  const entries = transcriptEntries(input.transcriptPath);
+  const results = new Map(entries
+    .filter((entry) => entry.type === 'GENERIC' && entry.status === 'DONE' && Number.isInteger(entry.step_index))
+    .map((entry) => [String(entry.step_index), entry]));
+  for (const [key, pending] of Object.entries(loaded.state.pendingTools)) {
+    const result = results.get(key);
+    if (!result) continue;
+    const content = String(result.content ?? '');
+    const exit = content.match(/(?:command\s+)?exited with (?:code|status)\s+(-?\d+)/i);
+    const denied = /tool call denied|blocked by pre-tool hook/i.test(content);
+    const success = !denied && (!exit || Number(exit[1]) === 0);
+    const error = success ? '' : denied ? 'tool call denied' : `exit status ${exit?.[1] ?? 'unknown'}`;
+    applyCompletedEvent(loaded.state, pending, Number(key), success, error);
+    delete loaded.state.pendingTools[key];
+  }
 }
 
 function reviewSignals(entries, afterStep) {
@@ -297,6 +319,7 @@ function reviewSignals(entries, afterStep) {
 function stop(input) {
   const loaded = loadState(input);
   if (loaded.error) return { decision: 'continue', reason: `Strict state could not be evaluated. Report unverified: ${loaded.error.message}` };
+  reconcilePendingFromTranscript(loaded, input);
   refreshPlan(input, loaded);
   const active = loaded.state.activePlan;
   const lastMutation = loaded.state.mutations.at(-1)?.stepIdx ?? -1;
@@ -348,7 +371,7 @@ function stop(input) {
 export function handleHook(input) {
   if (input?.toolCall) return preToolUse(input);
   if (Object.hasOwn(input ?? {}, 'terminationReason')) return stop(input);
-  if (Number.isInteger(input?.stepIdx) && Object.hasOwn(input, 'error')) return postToolUse(input);
+  if (Number.isInteger(input?.stepIdx)) return postToolUse(input);
   return {};
 }
 
