@@ -1,23 +1,55 @@
 # Superpowers Lite hardening `v0.3.4` → `v0.5.0`
 
-Handoff from Cursor for Codex. Branch is `cursor/hardening-v0.5.0`. **Do not merge `main`, tag, or GitHub-release until Codex re-verifies.** Other App plugins were not modified.
+Handoff from Cursor for Codex. Branch is `cursor/hardening-v0.5.0` and **is pushed** to `origin`. **Do not merge `main`, tag, or GitHub-release until Codex re-verifies.** Other App plugins were not modified.
+
+Remote: https://github.com/sylam0308/superpowers-lite-antigravity/tree/cursor/hardening-v0.5.0
+
+## Status for Codex
+
+**Cursor side is done** except native App GUI smoke. Headless/CLI gates passed. Waiting on Codex inspect + human App smoke before merge/tag.
+
+### Done (Cursor)
+
+- Three milestone commits on `cursor/hardening-v0.5.0`, pushed, not merged.
+- Public commands unchanged: `/superpowers-lite:plan|execute|debug|verify|review`.
+- App `/plan` contract unchanged in skills: option questions → brain Implementation Plan → **Proceed**. CLI still writes only `docs/plans/`. Same-turn dual write is forbidden in skill text.
+- Default **Lite** (no root `hooks.json`). **Strict** opt-in via `-Profile Strict`.
+- Unit (`node --test tests/unit`, 10/10), `node tests/validate.mjs`, `agy plugin validate .`.
+- Lite `-Suite All -Runs 2` = **32/32**. No XFAIL.
+- Strict suite: `protected_scope` 2/2, `strict_missing_verification` 2/2, `strict_out_of_scope` 2/2 after locked `deny` (see deviation below).
+- Deploy Lite ×2 idempotent (11 files, no hooks), Strict MATCH (13 files + hooks), undeploy dry-run only managed `superpowers-lite`, rollback to Lite. `chrome-devtools-plugin` checksum unchanged.
+- Mechanical quick task 2/2 on rolled-back Lite.
+- `git diff --check` exit 0 (CRLF warnings only).
+- Installed runtime now: Lite `0.5.0`, `C:\Users\yiwei\.gemini\config\plugins\superpowers-lite`.
+
+### Not done / not verified (Codex or human)
+
+- Native Antigravity App smoke: 4–6 option cards, brain Implementation Plan, **Proceed**, execute allowlist, failed-verify ≠ complete. Cursor cannot drive that chrome.
+- Strict App confirmation/deny UI (CLI hook **deny** is proven; App UI is not).
+- GitHub Actions on this branch (workflow exists; not observed green here).
+- Linux portable unit/validate locally (CI matrix is supposed to cover it).
+- Merge `main`, tag, GitHub Release — **blocked until Codex says yes**.
+
+### Locked spec deviation
+
+Out-of-scope Contract v2 writes are PreToolUse **`deny`**, not `force_ask`. Headless `--dangerously-skip-permissions` auto-approves `force_ask`. Protected / destructive / commit / push still `force_ask`.
 
 ## Identity
 
 | Item | Value |
 |---|---|
 | Base | `4735bf47b59564de7c148d36d0a4f795bd841a5f` (`v0.3.4` / `main`) |
-| Branch | `cursor/hardening-v0.5.0` |
+| Branch | `cursor/hardening-v0.5.0` (tracking `origin/cursor/hardening-v0.5.0`) |
 | `v0.3.5` harness | `0fa35906f49b9dbb027097ddd95c8b517363fe25` |
 | `v0.4.0` contract | `2623889d8ce728db259382f917e70da7737b1811` |
-| `v0.5.0` strict | this commit (`feat: add opt-in strict enforcement profile`) |
+| `v0.5.0` strict | `4666e3a22ff9f685ae0af0c51c5fee413292b3ec` |
 | `agy --version` | `1.1.24` |
 | Plugin registration | `source=antigravity` (shared App runtime) |
 | Actual App/CLI runtime | `C:\Users\yiwei\.gemini\config\plugins\superpowers-lite` |
 | Acceptance model | `gemini-3.7-flash-high --effort high` |
 | Node | `v20.20.1` |
 
-Milestone SHAs are the three commits on this branch after the base (see `git log --oneline 4735bf4..HEAD`).
+Product commits: `git log --oneline 4735bf4..4666e3a`. Any later commit on this branch is docs-only handoff.
 
 ## What shipped
 
