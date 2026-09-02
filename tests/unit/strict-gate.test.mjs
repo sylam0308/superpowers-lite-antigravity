@@ -3,56 +3,162 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { handleHook } from '../../hooks/strict-gate.mjs';
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'superpowers-lite-hook-'));
   const workspace = path.join(root, 'workspace');
   const artifacts = path.join(root, 'artifacts');
+  const transcript = path.join(artifacts, 'transcript.jsonl');
   fs.mkdirSync(path.join(workspace, '.agents'), { recursive: true });
   fs.mkdirSync(artifacts, { recursive: true });
-  return { root, workspace, artifacts, transcript: path.join(artifacts, 'transcript.jsonl') };
+  return { root, workspace, artifacts, transcript };
 }
 
-function writePlan(ctx) {
-  fs.writeFileSync(path.join(ctx.artifacts, 'implementation_plan.md'), `# Plan
-- [x] 1. Inspect
-- [x] 2. Edit
-- [x] 3. Verify
+function planText({ risk = 'medium', open = false } = {}) {
+  const box = open ? ' ' : 'x';
+  return `# Plan
+- [${box}] 1. Inspect
+- [${box}] 2. Edit
+- [${box}] 3. Verify
 <!-- superpowers-lite-contract
-{"schemaVersion":2,"planId":"2026-09-02-hook","risk":"medium","scope":{"allow":["src/allowed.mjs"],"deny":["secrets/**"]},"acceptance":[{"id":"AC-1","text":"Works","evidence":["V-1"]}],"steps":[{"id":"S-1","files":["src/allowed.mjs"],"acceptance":["AC-1"],"checks":["V-1"]},{"id":"S-2","files":["src/allowed.mjs"],"acceptance":["AC-1"],"checks":["V-1"]},{"id":"S-3","files":["src/allowed.mjs"],"acceptance":["AC-1"],"checks":["V-1"]}],"verification":[{"id":"V-1","command":"node --test","expected":"pass","required":true}]}
--->`);
+{"schemaVersion":2,"planId":"2026-09-02-hook","risk":"${risk}","scope":{"allow":["src/allowed.mjs"],"deny":["secrets/**"]},"acceptance":[{"id":"AC-1","text":"Works","evidence":["V-1"]}],"steps":[{"id":"S-1","files":["src/allowed.mjs"],"acceptance":["AC-1"],"checks":["V-1"]},{"id":"S-2","files":["src/allowed.mjs"],"acceptance":["AC-1"],"checks":["V-1"]},{"id":"S-3","files":["src/allowed.mjs"],"acceptance":["AC-1"],"checks":["V-1"]}],"verification":[{"id":"V-1","command":"node --test","expected":"pass","required":true}]}
+-->`;
 }
 
-test('allows quick in-workspace writes and denies outside writes', (t) => {
+function writeWorkspacePlan(ctx, options) {
+  const file = path.join(ctx.workspace, 'docs', 'plans', '2026-09-02-hook.md');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, planText(options));
+  return file;
+}
+
+function writeCliExecute(ctx, relative = 'docs/plans/2026-09-02-hook.md') {
+  fs.writeFileSync(ctx.transcript, `${JSON.stringify({
+    step_index: 0,
+    type: 'USER_INPUT',
+    content: `<USER_REQUEST>\n/superpowers-lite:execute Execute ${relative}.\n</USER_REQUEST>`
+  })}\n`);
+}
+
+function writeAppApproval(ctx) {
+  const file = path.join(ctx.artifacts, 'implementation_plan.md');
+  fs.writeFileSync(file, planText());
+  fs.writeFileSync(ctx.transcript, `${JSON.stringify({
+    step_index: 12,
+    type: 'USER_INPUT',
+    content: `Comments on artifact URI: ${pathToFileURL(file).href}\n\nThe user has approved this document.\n\n<USER_REQUEST>\n\n</USER_REQUEST>`
+  })}\n`);
+  return file;
+}
+
+function base(ctx) {
+  return {
+    conversationId: '00000000-0000-0000-0000-000000000001',
+    workspacePaths: [ctx.workspace],
+    artifactDirectoryPath: ctx.artifacts,
+    transcriptPath: ctx.transcript
+  };
+}
+
+function pre(ctx, stepIdx, name, args) {
+  return handleHook({ ...base(ctx), stepIdx, toolCall: { name, args } });
+}
+
+function post(ctx, stepIdx, error = '') {
+  return handleHook({ ...base(ctx), stepIdx, error });
+}
+
+function stop(ctx) {
+  return handleHook({ ...base(ctx), terminationReason: 'model_stop', fullyIdle: true });
+}
+
+test('keeps contract-less quick tasks free and ignores old plans', (t) => {
   const ctx = fixture(); t.after(() => fs.rmSync(ctx.root, { recursive: true, force: true }));
-  const base = { workspacePaths: [ctx.workspace], artifactDirectoryPath: ctx.artifacts };
-  assert.equal(handleHook({ ...base, toolCall: { name: 'write_to_file', args: { TargetFile: path.join(ctx.workspace, 'src/a.mjs') } } }).decision, 'allow');
-  assert.equal(handleHook({ ...base, toolCall: { name: 'write_to_file', args: { TargetFile: path.join(ctx.root, 'outside.txt') } } }).decision, 'deny');
+  writeWorkspacePlan(ctx);
+  assert.equal(pre(ctx, 1, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'src/a.mjs') }).decision, 'allow');
+  assert.equal(pre(ctx, 2, 'write_to_file', { TargetFile: path.join(ctx.root, 'outside.txt') }).decision, 'deny');
 });
 
-test('denies Contract scope violations and force-asks protected paths', (t) => {
+test('activates CLI plan, enforces paths, and denies shell bypasses', (t) => {
   const ctx = fixture(); t.after(() => fs.rmSync(ctx.root, { recursive: true, force: true }));
-  writePlan(ctx);
+  writeWorkspacePlan(ctx);
+  writeCliExecute(ctx);
   fs.writeFileSync(path.join(ctx.workspace, '.agents', 'superpowers-lite.json'), JSON.stringify({ schemaVersion: 1, protectedPaths: ['src/protected.mjs'] }));
-  const base = { workspacePaths: [ctx.workspace], artifactDirectoryPath: ctx.artifacts };
-  assert.equal(handleHook({ ...base, toolCall: { name: 'write_to_file', args: { TargetFile: path.join(ctx.workspace, 'src/other.mjs') } } }).decision, 'deny');
-  assert.equal(handleHook({ ...base, toolCall: { name: 'write_to_file', args: { TargetFile: path.join(ctx.workspace, 'src/protected.mjs') } } }).decision, 'force_ask');
-  assert.equal(handleHook({ ...base, toolCall: { name: 'write_to_file', args: { TargetFile: path.join(ctx.workspace, 'src/allowed.mjs') } } }).decision, 'allow');
+  assert.equal(pre(ctx, 1, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'src/other.mjs') }).decision, 'deny');
+  assert.equal(pre(ctx, 2, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'src/protected.mjs') }).decision, 'force_ask');
+  assert.equal(pre(ctx, 3, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'src/allowed.mjs') }).decision, 'allow');
+  assert.equal(pre(ctx, 4, 'run_command', { CommandLine: 'git status' }).decision, 'allow');
+  assert.equal(pre(ctx, 5, 'run_command', { CommandLine: 'node --test' }).decision, 'allow');
+  for (const command of [
+    "Set-Content src/other.mjs 'bypass'",
+    'Get-Content src/allowed.mjs | Set-Content src/other.mjs',
+    `node -e "require('fs').writeFileSync('src/other.mjs','bypass')"`,
+    `python -c "open('src/other.mjs','w').write('bypass')"`
+  ]) assert.equal(pre(ctx, 6, 'run_command', { CommandLine: command }).decision, 'deny', command);
 });
 
-test('requires verification after mutation and caps no-progress continuation', (t) => {
+test('recognizes native App approval and exact artifact URI', (t) => {
   const ctx = fixture(); t.after(() => fs.rmSync(ctx.root, { recursive: true, force: true }));
-  fs.writeFileSync(ctx.transcript, '{"tool":"write_to_file","target":"src/a.mjs"}\n');
-  const input = { terminationReason: 'model_stop', workspacePaths: [ctx.workspace], artifactDirectoryPath: ctx.artifacts, transcriptPath: ctx.transcript };
-  assert.equal(handleHook(input).decision, 'continue');
-  assert.equal(handleHook(input).decision, 'continue');
-  assert.equal(handleHook(input).decision, 'allow');
+  writeAppApproval(ctx);
+  assert.equal(pre(ctx, 13, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'src/other.mjs') }).decision, 'deny');
+  assert.equal(pre(ctx, 14, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'src/allowed.mjs') }).decision, 'allow');
 });
 
-test('allows stop when verification follows the final mutation', (t) => {
+test('pairs PostToolUse results and requires every fresh check', (t) => {
   const ctx = fixture(); t.after(() => fs.rmSync(ctx.root, { recursive: true, force: true }));
-  fs.writeFileSync(ctx.transcript, '{"tool":"write_to_file"}\n{"tool":"run_command","CommandLine":"node --test","output":"pass"}\n');
-  const result = handleHook({ terminationReason: 'model_stop', workspacePaths: [ctx.workspace], artifactDirectoryPath: ctx.artifacts, transcriptPath: ctx.transcript });
-  assert.equal(result.decision, 'allow');
+  writeWorkspacePlan(ctx);
+  writeCliExecute(ctx);
+  assert.equal(pre(ctx, 1, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'src/allowed.mjs') }).decision, 'allow');
+  post(ctx, 1);
+  assert.equal(pre(ctx, 2, 'run_command', { CommandLine: 'node --test' }).decision, 'allow');
+  post(ctx, 2, 'exit status 1');
+  assert.equal(pre(ctx, 3, 'run_command', { CommandLine: 'git diff --check' }).decision, 'allow');
+  post(ctx, 3);
+  assert.equal(stop(ctx).decision, 'continue');
+  assert.equal(pre(ctx, 4, 'run_command', { CommandLine: 'node --test' }).decision, 'allow');
+  post(ctx, 4);
+  assert.equal(stop(ctx).decision, 'allow');
+});
+
+test('does not accept git diff as the only behavioral verification', (t) => {
+  const ctx = fixture(); t.after(() => fs.rmSync(ctx.root, { recursive: true, force: true }));
+  assert.equal(pre(ctx, 1, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'README.md') }).decision, 'allow');
+  post(ctx, 1);
+  assert.equal(pre(ctx, 2, 'run_command', { CommandLine: 'git diff --check' }).decision, 'allow');
+  post(ctx, 2);
+  assert.match(stop(ctx).reason, /behavioral verification/i);
+});
+
+test('allows checklist ticks but blocks approved-plan drift', (t) => {
+  const ctx = fixture(); t.after(() => fs.rmSync(ctx.root, { recursive: true, force: true }));
+  const plan = writeWorkspacePlan(ctx, { open: true });
+  writeCliExecute(ctx);
+  assert.equal(pre(ctx, 1, 'run_command', { CommandLine: 'git status' }).decision, 'allow');
+  fs.writeFileSync(plan, planText({ open: false }));
+  assert.equal(pre(ctx, 2, 'write_to_file', { TargetFile: plan }).decision, 'allow');
+  post(ctx, 2);
+  fs.appendFileSync(plan, '\nUnexpected architecture change.\n');
+  assert.equal(pre(ctx, 3, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'src/allowed.mjs') }).decision, 'deny');
+});
+
+test('caps two no-progress continuations', (t) => {
+  const ctx = fixture(); t.after(() => fs.rmSync(ctx.root, { recursive: true, force: true }));
+  pre(ctx, 1, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'README.md') });
+  post(ctx, 1);
+  assert.equal(stop(ctx).decision, 'continue');
+  assert.equal(stop(ctx).decision, 'continue');
+  const final = stop(ctx);
+  assert.equal(final.decision, 'allow');
+  assert.match(final.reason, /blocked\/unverified/i);
+});
+
+test('fails safe on corrupt state without looping Stop forever', (t) => {
+  const ctx = fixture(); t.after(() => fs.rmSync(ctx.root, { recursive: true, force: true }));
+  const directory = path.join(ctx.artifacts, '.superpowers-lite');
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, 'strict-state.json'), '{broken');
+  assert.equal(pre(ctx, 1, 'write_to_file', { TargetFile: path.join(ctx.workspace, 'README.md') }).decision, 'deny');
+  assert.equal(stop(ctx).decision, 'continue');
 });

@@ -3,7 +3,19 @@
     "enabled": true,
     "PreToolUse": [
       {
-        "matcher": "write_to_file|replace_file_content|multi_replace_file_content|run_command",
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content|sed_file|notebook_edit|run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node hooks/strict-gate.mjs",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content|sed_file|notebook_edit|run_command",
         "hooks": [
           {
             "type": "command",
