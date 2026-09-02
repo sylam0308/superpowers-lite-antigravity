@@ -1,56 +1,52 @@
 ---
 name: execute
-description: Implement an approved plan in order, verify each step, and claim done only with fresh evidence. Use when the user clicks Proceed, approves an Implementation Plan artifact, invokes /superpowers-lite:execute, or asks to implement it with ok, duyệt, làm đi, or implement this plan.
+description: Execute an approved plan against a recorded baseline, enforce Contract v2 scope, verify each step, and claim completion only from fresh evidence. Use after Proceed, plan approval, or /superpowers-lite:execute.
 ---
 
 # Execute
 
-Implement only an approved plan. Follow its numbered steps in order. Do not skip, reorder, or add work outside it.
+Implement only an approved plan, in its stated order.
 
-## Preflight
+## Preflight and baseline
 
-1. Locate and read the approved plan completely. Prefer the host Implementation Plan artifact when present; otherwise use `docs/plans/YYYY-MM-DD-<slug>.md`. If the artifact exists and no `docs/plans/*.md` file exists yet, copy the artifact markdown to `docs/plans/YYYY-MM-DD-<slug>.md` before changing implementation files.
-2. Inspect every named file and the current Git diff.
-3. Check the plan against current code. Confirm its acceptance criteria are testable, paths exist or are intentional additions, and commands are valid.
-4. If the plan is stale, contradictory, unsafe, or cannot meet its own acceptance criteria, stop with concrete evidence and propose the smallest correction. Do not silently reinterpret it.
+1. Read the approved plan completely. Prefer the host Implementation Plan artifact; otherwise use the named workspace plan. Do not create a second plan copy merely to execute it.
+2. If the plan has a `superpowers-lite-contract`, parse it and stop on invalid JSON, unmapped acceptance, unsafe paths, unknown IDs, placeholders, or fewer than 3/more than 7 steps. A plan without the comment is legacy mode: follow its written Scope but do not claim machine-enforced scope.
+3. Read optional `.agents/superpowers-lite.json`; merge required checks, protected paths, and blocking severities.
+4. Record baseline evidence before the first edit: `HEAD`, `git status --porcelain=v1 -uall`, current diff, plan SHA-256, risk, allowlist, and pre-existing changed paths. Never overwrite or reformat pre-existing user work.
+5. Inspect every named file and validate paths, commands, prerequisites, and acceptance testability against current code. If the plan is stale, contradictory, unsafe, or insufficient, stop with evidence and the smallest decision required. Do not silently reinterpret it.
 
-## Work one step at a time
+## Execute one step at a time
 
-For the next unchecked numbered step (`- [ ] N.`):
+For the next unchecked step:
 
-1. Implement only that step's Files.
-2. Run that step's Check command (or the nearest listed verification if the step has no Check).
-3. Inspect the diff for accidental edits.
-4. Change `- [ ] N.` to `- [x] N.` only after the Check passes, on both the repo plan file and the Implementation Plan artifact when both exist. Note the command and exit code under the step when useful.
-5. Then proceed to the next numbered step.
+1. Implement only that step's files. Contract v2 paths must match `scope.allow`. Protected paths require explicit approval even when allowed.
+2. Run the step's named check and capture command, exit code, and observed output.
+3. Compare current changed paths with baseline plus allowlist. Stop immediately on a new out-of-scope path.
+4. Inspect the step diff for accidental edits.
+5. Tick the step only after its check passes and its acceptance mapping is still valid. Keep the host artifact checklist synchronized when it is the approved source.
 
-Optionally keep a host task artifact (`ArtifactType: "task"`) in sync for progress UI. It does not replace the plan checklist.
-
-Follow current project conventions and keep the diff minimal. Use an existing test harness for behavior changes. For a bug, add a regression test that fails for the reproduced behavior before applying the fix when the harness can express it. Mechanical changes do not require ceremonial tests.
+Use the existing test harness for behavior changes. For a defect, add a failing regression when the harness can express it before applying the fix. Mechanical edits do not require ceremonial tests.
 
 ## Stop conditions
 
-Stop and request a decision when:
+Stop and return `blocked` or request a decision when:
 
-- a file outside the plan's in-scope list must change;
-- an interface, data model, dependency, or behavioral assumption changes;
-- a destructive or external action becomes necessary;
-- the same verification direction fails three times without new evidence.
+- an out-of-scope or protected path is required;
+- a public interface, dependency, data model, architecture, or acceptance assumption changes;
+- plan content/hash changed unexpectedly after execution began;
+- destructive or external state is required but not authorized;
+- the same direction fails three times without materially new evidence.
 
-Report the evidence, affected step, and smallest decision needed. Do not expand scope, install dependencies, commit, or push unless requested.
+Never expand scope, install dependencies, commit, push, or discard user changes unless explicitly requested.
 
 ## Finish gate
 
-Before any completion claim:
+After the final implementation mutation:
 
-1. Every numbered step checkbox is `[x]`.
-2. Run every command in Verification plus `git diff --check`.
-3. If those results prove the acceptance criteria, mark those checkboxes `[x]` as well. Leave no `- [ ]` in the plan.
-4. Report an evidence table:
+1. Confirm every step is checked.
+2. Run every required Contract verification plus project-policy required checks and `git diff --check`.
+3. For medium/high risk, inspect the complete diff. For high risk, run review and require no configured blocking severity.
+4. Map each acceptance criterion to fresh observed evidence. Exit code 0 alone is insufficient when the expected behavior was not observed.
+5. Report a verification matrix: criterion, command/interaction, exit/status, observed result, and proven/not proven.
 
-| Command or interaction | Exit/status | Observed result | Proves |
-|---|---:|---|---|
-
-Then list **Verified**, **Not verified**, and **Failures/blockers**.
-
-Do not say the work is done, complete, or fixed while any `- [ ]` remains, a required check failed, or a critical/high review finding remains. Fresh command output from this turn is the only evidence.
+Then list **Verified**, **Not verified**, and **Failures/blockers**. Do not use done/fixed/complete language while any checkbox is open, required check is missing or failed, evidence predates the final mutation, or a blocking review finding remains.

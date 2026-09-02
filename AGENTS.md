@@ -3,7 +3,7 @@
 This directory is the source of truth for the `superpowers-lite` Antigravity plugin.
 
 - Keep the baseline rule short and proportional. A clear local change must stay a quick task.
-- Keep each workflow self-contained. Do not add mandatory bootstrap, brainstorming, worktrees, subagents, commits, hooks, telemetry, or MCP servers.
+- Keep each workflow self-contained. Do not add mandatory bootstrap, brainstorming, worktrees, subagents, commits, telemetry, or MCP servers. Hooks may exist only in the opt-in Strict profile; Lite must remain hook-free.
 - Write runtime instructions in concise English. Keep user documentation in Vietnamese and English.
 - Never edit an installed App or CLI copy directly. Run `scripts/deploy.ps1` after validation.
 - Add or update validator and fixture coverage for any behavioral change.

@@ -8,26 +8,30 @@ alwaysApply: true
 
 Match process to risk and scope.
 
-## Default: quick task
+## Quick task by default
 
-When the request is clear, local, and reversible, do not create a plan or ask for approval. Inspect the relevant file and nearby conventions, make the smallest sufficient change, then run a targeted fresh check. Typical quick tasks include typo fixes, small configuration edits, narrow test updates, and localized refactors with an obvious contract.
+When a request is clear, local, and reversible, do not plan or ask for approval. Inspect the relevant file, project instructions, nearby conventions, and targeted check; make the smallest sufficient change; run fresh verification after the edit. Typos, narrow configuration changes, focused tests, and obvious local refactors usually use this path.
 
 ## Inspect before acting
 
-Read the requested files, relevant tests, project instructions, and nearby call sites before editing. Search code, docs, Git history, and the conversation before asking a question. Never ask the user to repeat information that is already available. If a missing choice materially changes behavior, an interface, data ownership, security, or irreversible state, ask only that question.
+Search the request, conversation, code, tests, docs, Git history, and current diff before asking. Never ask the user to repeat a discoverable fact. Do not treat a plausible default as a user decision. Build a decision ledger for behavior, public interfaces, external stores/services/queues, data ownership/migration, dependency/vendor, deployment, security, compatibility, destructive state, and scope. If an applicable item lacks an explicit source, stop and ask; never select the boundary or hide it behind a conditional plan.
 
-## Scope discipline
+## Scope and user work
 
-Keep changes inside the requested scope. Do not add unrelated cleanup. Do not commit, push, install dependencies, change external state, or perform destructive actions unless the user explicitly requests it. If correct implementation requires an out-of-scope file or invalidates an approved assumption, stop and explain the smallest decision needed.
+Record the initial worktree state before substantive edits. Preserve pre-existing user changes and avoid unrelated cleanup. Follow an approved plan's in/out scope; Contract v2 allowlists are authoritative. Read optional `.agents/superpowers-lite.json` for required checks, protected paths, and review gates. Do not commit, push, install dependencies, change external state, or perform destructive operations unless explicitly requested. Stop if correct work requires a new file, interface, dependency, or decision outside approval.
 
 ## Evidence before claims
 
-Never say a change works or is complete without fresh verification output from the current state. Prefer the narrowest relevant test first, then project-defined lint, typecheck, build, or broader tests when risk warrants them. Report the command, exit code, observed result, and anything not verified. If verification fails, report the failure and blocked status; do not use success language.
+Never claim success from expectation, old output, or model confidence. Fresh evidence must run after the last relevant mutation. Prefer targeted behavior checks first, then every required Contract/project-policy check and broader project-defined checks proportional to risk. Exit code 0 is not proof unless the expected behavior was observed. Report command/interaction, status, observation, what it proves, and what remains unverified. A required failure or unavailable check means blocked/failed, never completed.
 
-## Load workflows only when useful
+## Load only the needed workflow
 
-Use the dedicated `plan`, `execute`, `debug`, `verify`, or `review` skill when the user invokes it or the task clearly needs that workflow. Do not preload the whole skill library. Planning is appropriate for multi-file or risky work with meaningful sequencing; debugging is appropriate when the cause is unknown; review is appropriate when evaluating a diff. TDD is useful when an existing test harness can express the behavior or a bug needs a regression test, but it is not a ceremony for mechanical edits.
+Use `plan`, `execute`, `debug`, `verify`, or `review` when invoked or clearly needed; do not preload the library. Planning is for meaningful sequencing/risk. Debugging begins with reproduction and a falsifiable hypothesis. Review traces the diff through callers and state transitions. TDD is useful for behavior changes and regressions when a harness exists, not as ceremony for mechanical edits. Worktrees, subagents, commits, and brainstorming are optional, never mandatory.
 
-## Planning intake
+## Plan surface invariant
 
-When the user invokes `/plan`, `/superpowers-lite:plan`, or asks for an implementation plan, follow the `plan` skill. A brain path or plan mode never bypasses intake. If persistent storage is requested without a named backend, writing any plan or artifact is forbidden: inspect, ask four to six option questions, and stop. Otherwise, if the user message does not already name a `dir/file.ext` path plus a vendor or an exact behavior plus a check, ask the same intake first. Folder names and files found during inspection are not the user's chosen scope. After native `ask_question`, lock to the App surface: write only the brain `implementation_plan.md` with `RequestFeedback` and never a workspace plan in that turn. In `agy`/print mode, write only `docs/plans/`. Never produce both.
+For `/plan` or `/superpowers-lite:plan`, follow the plan skill: inspect, resolve material decisions, critique feasibility, then produce Contract v2. A new external store/cache/database/queue/service/provider cannot be planned until its applicable backend, topology, contract, ownership/durability, and migration choices have explicit sources. Architecture work commonly needs one round of 4-6 option questions; never invent filler questions. After native `ask_question`, lock to the App surface. App writes only the brain `implementation_plan.md` with requested feedback so **Proceed** renders. In `agy` print/headless mode, never write a brain artifact: incomplete decisions return `needs_input` with questions and no writes; complete decisions write one workspace `docs/plans/` file. Never produce both.
+
+## Completion gate
+
+Before completion, confirm no open plan step, out-of-scope path, stale plan, required verification gap, or configured blocking review finding remains. For medium/high risk inspect the whole diff; high risk requires review. If the same approach fails three times without new evidence, stop and report the blocker rather than adding a fourth speculative patch.
