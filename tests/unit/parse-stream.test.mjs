@@ -27,3 +27,25 @@ test('records malformed non-JSON lines without losing the terminal result', () =
   assert.equal(parsed.invalidLines.length, 1);
   assert.equal(parsed.result.status, 'ERROR');
 });
+
+test('retains hook-denied ERROR events with their parameters exactly once', () => {
+  const step = { conversation_id: 'c', step_index: 7, step_type: 'tool', tool_name: 'run_command', tool_info: {
+    parameters: { CommandLine: 'Set-Content src/other.mjs new' },
+    error: { message: 'tool call denied by pre-tool hook: Strict profile denies an unapproved command' }
+  } };
+  const raw = ['ACTIVE', 'ERROR', 'ERROR'].map(state => JSON.stringify({ event: 'step_update', step_update: { ...step, state } })).join('\n');
+  const parsed = parseStream(raw);
+  assert.equal(parsed.tools.length, 1);
+  assert.equal(parsed.tools[0].state, 'ERROR');
+  assert.equal(parsed.tools[0].failed, true);
+  assert.equal(parsed.tools[0].command, step.tool_info.parameters.CommandLine);
+  assert.deepEqual(parsed.tools[0].error, step.tool_info.error);
+});
+
+test('Test-Path is inspection, not verification; node --check is verification', () => {
+  const commands = ['Test-Path .agents/superpowers-lite.json', 'git rev-parse HEAD', 'node --check src/account.mjs'];
+  const raw = commands.map((command, index) => JSON.stringify({ event: 'step_update', step_update: {
+    step_index: index, state: 'DONE', step_type: 'tool', tool_name: 'run_command', tool_info: { parameters: { CommandLine: command } }
+  } })).join('\n');
+  assert.deepEqual(parseStream(raw).tools.map(tool => tool.kind), ['inspection', 'inspection', 'verification']);
+});

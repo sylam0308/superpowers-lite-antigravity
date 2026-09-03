@@ -4,7 +4,7 @@ const inspectTools = new Set([
   'view_file', 'list_dir', 'find_by_name', 'grep_search', 'search_web',
   'read_url_content', 'list_permissions'
 ]);
-const writeTools = new Set(['write_to_file', 'replace_file_content', 'multi_replace_file_content']);
+const writeTools = new Set(['write_to_file', 'replace_file_content', 'multi_replace_file_content', 'sed_file', 'notebook_edit']);
 
 function commandLine(info = {}) {
   const parameters = info.parameters ?? {};
@@ -16,13 +16,14 @@ function classifyTool(step) {
   const info = step.tool_info ?? {};
   const command = commandLine(info);
   const lower = command.toLowerCase();
-  const isInspectionCommand = name === 'run_command' && /(^|[;&|]\s*)(git\s+(status|diff|log|show|ls-files)|rg\b|grep\b|get-content\b|test-path\b|ls\b|dir\b)/i.test(command);
-  const isVerificationCommand = name === 'run_command' && /(\btest\b|node\s+--test|check\.mjs|lint|typecheck|build|git\s+diff\s+--check)/i.test(command);
+  const isInspectionCommand = name === 'run_command' && /(^|[;&|]\s*)(git\s+(status|diff|log|show|ls-files|rev-parse)|rg\b|grep\b|get-content\b|test-path\b|ls\b|dir\b)/i.test(command);
+  const isVerificationCommand = name === 'run_command' && /(?:node\s+--(?:test|check)|(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:test|lint|typecheck|build)\b|node\s+\S*check\.mjs|git\s+diff\s+--check)/i.test(command);
   const isMutationCommand = name === 'run_command' && /(set-content|add-content|out-file|copy-item|move-item|remove-item|npm\s+(install|uninstall)|pnpm\s+(add|remove)|yarn\s+(add|remove)|git\s+(add|commit|push|checkout|switch|reset|clean)|\brm\b|\bmv\b|\bcp\b)/i.test(command);
   return {
     name,
     command,
     parameters: info.parameters ?? {},
+    state: step.state,
     kind: writeTools.has(name) || isMutationCommand
       ? 'mutation'
       : isVerificationCommand
@@ -30,7 +31,7 @@ function classifyTool(step) {
         : inspectTools.has(name) || isInspectionCommand
           ? 'inspection'
           : 'other',
-    failed: Boolean(info.error) || /exit (code|status)\s*[1-9]|\bnot ok\b|\bfailed\b/i.test(String(info.output ?? '')),
+    failed: step.state === 'ERROR' || Boolean(info.error) || /exit (code|status)\s*[1-9]|\bnot ok\b|\bfailed\b/i.test(String(info.output ?? '')),
     output: String(info.output ?? ''),
     error: info.error ?? null,
     lowerCommand: lower
@@ -56,7 +57,7 @@ export function parseStream(raw) {
   for (const event of events) {
     if (event.event !== 'step_update') continue;
     const step = event.step_update ?? {};
-    if (step.state !== 'DONE') continue;
+    if (!['DONE', 'ERROR'].includes(step.state)) continue;
     if (step.step_type === 'finish') finishes.push(step.step_index ?? finishes.length);
     if (step.step_type === 'system_message') {
       systemMessages.push({
