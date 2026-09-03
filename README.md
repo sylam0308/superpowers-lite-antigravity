@@ -2,6 +2,8 @@
 
 Lightweight, evidence-driven coding workflows for medium projects and Gemini 3.7 Flash High. The plugin keeps a short always-on rule and loads a specialized skill only when requested or clearly useful.
 
+Gemini 3.8 Flash High is the current release-candidate acceptance target. Its CLI matrix and Lite App intake/Proceed smoke have passed; the full release gate is tracked in [the verification report](docs/reports/2026-09-03-command-separation-gemini-3.8.md). This is not yet a new stable-model recommendation.
+
 ## Tiếng Việt
 
 ### Lite khác gì bản đầy đủ?
@@ -98,7 +100,7 @@ agy plugin list
 
 ### Behavior tests
 
-Harness dùng `agy --output-format stream-json` để chấm cả tool trajectory, filesystem diff, structured outcome và test output. Mặc định tạo fixture disposable và chạy hai vòng critical scenarios bằng Gemini 3.7 Flash High:
+Harness dùng `agy --output-format stream-json` để chấm cả tool trajectory, filesystem diff, structured outcome và test output. Mặc định tạo fixture disposable và chạy hai vòng critical scenarios bằng Gemini 3.8 Flash High:
 
 ```powershell
 pwsh -File tests\run-behavior-tests.ps1
@@ -127,7 +129,7 @@ Script chỉ thao tác target có marker đúng `superpowers-lite`. CLI được
 
 1. Deploy `All`, restart Antigravity App, và tạo conversation mới.
 2. Mở một bản copy disposable của `tests\fixtures\qa-project`.
-3. Chọn Gemini 3.7 Flash High và gõ `/`; xác nhận đủ năm command.
+3. Chọn Gemini 3.8 Flash High và gõ `/`; xác nhận đủ năm command.
 4. Chạy quick task, `/spl-plan` (luôn 4–6 option), **Proceed** hoặc `/spl-execute`, debug, và failed-verification theo `tests\fixtures\SCENARIOS.md`.
 5. Kiểm tra Diff/Artifact/Walkthrough, sau đó chạy lại `verify-install.ps1 -Surface All`.
 
