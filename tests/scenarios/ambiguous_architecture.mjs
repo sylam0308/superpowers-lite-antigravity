@@ -3,5 +3,8 @@ export default {
   suite: ['Critical', 'All'],
   fixture: 'ambiguous_architecture',
   allowedPaths: [],
-  prompt: '/superpowers-lite:plan Replace the process-local cache with persistent storage suitable for production and plan the migration.'
+  turns: [{
+    schema: 'plan-intake.schema.json',
+    prompt: '/spl-plan Replace the process-local cache with persistent storage suitable for production and plan the migration.'
+  }]
 };

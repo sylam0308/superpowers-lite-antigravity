@@ -1,6 +1,6 @@
 ---
-name: plan
-description: Inspect a repository, resolve material decisions, and produce a reviewable Contract v2 implementation plan. Use for /plan, /superpowers-lite:plan, or an explicit planning request; not for clear localized quick tasks.
+name: spl-plan
+description: Run the Superpowers Lite planning interview and produce a reviewable Contract v2 plan. Use only for /spl-plan or an explicit request to use Superpowers Lite planning; never replace Antigravity's native /plan.
 ---
 
 # Plan
@@ -9,9 +9,11 @@ Produce a plan only. Do not edit implementation files.
 
 ## Non-negotiable gates before any write
 
-1. **External-boundary gate:** If the request adds or replaces storage, cache persistence, a database, queue, remote service, auth/payment/AI provider, or another external dependency, a plan is forbidden until the concrete backend/provider, deployment topology, public sync/async or delivery contract, ownership/durability, and migration/compatibility choices that apply are evidenced by the request, conversation, or repository contract. Inspect, ask option questions, and stop. Never choose Redis or another reasonable default.
-2. **CLI surface gate:** In `agy`, print/headless mode, or `.gemini/antigravity-cli/brain/`, a brain `implementation_plan.md` is forbidden. CLI writes only `docs/plans/` after decisions are complete. When decisions are incomplete, CLI writes nothing and returns the questions with outcome `needs_input`.
-3. **App surface gate:** Native `ask_question` or an App brain path locks the App surface. After answers, write only the brain artifact with requested feedback; workspace `docs/plans/` is forbidden in that turn.
+1. **Mandatory intake:** Every new `/spl-plan` request requires one option-question round before any plan write, even when the request looks complete or small. Repository inspection can improve the options; it can never skip the round.
+2. **External-boundary gate:** If the request adds or replaces storage, a database, queue, remote service, auth/payment/AI provider, dependency, migration, or another external boundary, do not choose the backend, topology, contract, ownership, durability, compatibility, security, or rollout for the user.
+3. **CLI surface gate:** In `agy`, print/headless mode, or `.gemini/antigravity-cli/brain/`, never write a brain artifact. Before answers, return `needs_input`; after answers, write only `docs/plans/`.
+4. **App surface gate:** Native `ask_question` or an App brain path locks the App surface. After answers, write only the brain artifact with requested feedback; workspace `docs/plans/` is forbidden in that turn.
+5. **Native command isolation:** `/plan` belongs to Antigravity. Do not apply this skill to native `/plan` unless the user explicitly asks for Superpowers Lite or invokes `/spl-plan`.
 
 These gates run before an artifact path, convenient default, conditional architecture, or desire to be helpful can influence the output.
 
@@ -19,21 +21,15 @@ These gates run before an artifact path, convenient default, conditional archite
 
 Before asking or writing, read project instructions, relevant source and tests, package scripts, existing plans, the current diff, and recent Git history. Trace current behavior far enough to name real files and exact verification commands. Repository evidence may answer facts; it cannot make a product choice for the user.
 
-## 2. Decision-completeness gate
+## 2. Mandatory interview
 
-List the decisions that materially affect any of these boundaries:
+For the first turn of every new planning request, ask one batch of four to six questions after inspection and stop. Do not write a plan, artifact, backup, or implementation file. This remains mandatory when the request already names files, behavior, and tests.
 
-- observable behavior or public interface;
-- data ownership, persistence, migration, durability, or compatibility;
-- dependency, vendor, deployment topology, or operating cost;
-- security, permissions, destructive state, or irreversible rollout;
-- files intentionally in or out of scope.
+The batch always resolves: (1) desired behavior and breadth, (2) file/module scope, (3) invariants, compatibility, and exclusions, and (4) verification and acceptance depth. Add one or two questions when architecture, dependency/vendor, data ownership, migration, security, destructive state, or rollout decisions apply.
 
-A decision is resolved only when the request, conversation, or an established repository contract provides it. A plausible default is not evidence. Build a decision ledger and mark each boundary `resolved` with its source or `unresolved`. When a request introduces or replaces an external store/service/queue, dependency, deployment topology, public contract, migration, or security boundary, every applicable choice must have explicit evidence; the agent must not select Redis, a cloud vendor, delivery semantics, sync/async behavior, rollout, or another boundary itself. A conditional plan does not resolve the choice.
+Each question must end with `?`, contain three to six mutually exclusive options, and be answerable as a choice. Ground options in the request and inspected repository. Do not ask discoverable facts. For a fully specified request, offer `Keep the request exactly as written` plus meaningful narrower or broader alternatives. Mark a recommendation only when evidence supports it; never invent a default to avoid asking.
 
-If any ledger item is unresolved, ask one native `ask_question` round in the App when available. In CLI print/headless mode, do not call an interactive question tool: return the option questions in the final structured `questions` field with outcome `needs_input`. Otherwise use one equivalent option list. Architecture work normally needs four to six questions; never invent filler questions. Group related dimensions in one question, give 3-6 mutually exclusive options, and mark a recommendation only when evidence supports it. Then stop: no plan, artifact, workspace write, or implementation until answers arrive. There is no exception for a convenient default or an available artifact path.
-
-If no material decision remains, do not ask for confirmation or repeat facts already discovered.
+Use native `ask_question` in the App. In CLI print/headless mode, return `outcome: needs_input` and encode every question with its options; write nothing. After answers, build a decision ledger from the request, answers, and repository evidence. If a contradiction or blocking choice remains, ask only one or two additional option questions and stop again. Otherwise proceed. A new `/spl-plan` or a material change to goal/scope starts a new mandatory round.
 
 ## 3. Feasibility and policy
 
@@ -69,7 +65,7 @@ low | medium | high, with one-sentence reason
 | ID | Criterion | Command | Expected | Required |
 ```
 
-Write 3-7 numbered checkbox steps. Each step must name Files, Acceptance, Behavior, and Check. Use repository-relative forward-slash paths. Do not use `**/*` unless the request explicitly authorizes whole-repository scope. Do not include implementations, microsteps, commits, or placeholders.
+Write 3-7 numbered checkbox steps. Each step must name Files, Acceptance, Behavior, and Check. Use repository-relative forward-slash paths. Drive-letter paths, absolute paths, UNC paths, file URIs, backslashes, and `..` are forbidden in both the human plan and contract. Verification commands run from the repository root and use relative paths. Do not use `**/*` unless the request explicitly authorizes whole-repository scope. Do not include implementations, microsteps, commits, or placeholders.
 
 Append exactly one machine-readable comment containing the same plan:
 
@@ -99,8 +95,8 @@ Lock the surface before the first write. Never produce both outputs.
 
 **Antigravity App:** Use when the artifact directory is under `.gemini/antigravity/brain/` or `.gemini/antigravity-ide/brain/`, or native `ask_question` was used. Write only the host `implementation_plan.md` brain artifact. Set `ArtifactMetadata.RequestFeedback: true`, `ArtifactMetadata.UserFacing: true`, and a concise Summary. Do not create or mention workspace `docs/plans/`. Stop immediately after feedback is requested so the host renders **Proceed**.
 
-**Antigravity CLI:** Use only for `agy`/print mode or a CLI brain path. Write exactly one `docs/plans/YYYY-MM-DD-slug.md`; do not create a brain artifact. Tell the user to approve it with `/superpowers-lite:execute <path>`.
+**Antigravity CLI:** Use only for `agy`/print mode or a CLI brain path. Write exactly one `docs/plans/YYYY-MM-DD-slug.md`; do not create a brain artifact. Tell the user to approve it with `/spl-execute <path>`.
 
 ## Handoff
 
-State that no implementation code changed. Proceed, artifact approval, `/superpowers-lite:execute`, or an explicit approval starts execution. Never implement in the planning turn.
+State that no implementation code changed. Proceed, artifact approval, `/spl-execute`, or an explicit approval starts execution. Never implement in the planning turn.

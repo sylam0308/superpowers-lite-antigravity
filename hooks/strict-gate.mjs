@@ -90,7 +90,7 @@ function activationSignal(input) {
   for (const entry of entries) {
     const content = String(entry.content ?? '');
     const request = userRequest(content);
-    if (/\/superpowers-lite:execute\b/i.test(request)) {
+    if (/\/spl-execute\b/i.test(request)) {
       const paths = [...request.matchAll(/(?:^|[\s`"'(])((?:docs[\\/]plans[\\/])[A-Za-z0-9._\-/\\]+\.md)\b/gi)]
         .map((match) => match[1].replaceAll('\\', '/'));
       signal = { kind: 'cli', step: Number(entry.step_index ?? 0), paths: [...new Set(paths)] };

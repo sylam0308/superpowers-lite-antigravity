@@ -1,6 +1,6 @@
 ---
-name: review
-description: Review an in-scope diff against acceptance criteria and existing repository conventions, with evidence-ranked findings. Use when the user invokes /superpowers-lite:review or asks for a code review.
+name: spl-review
+description: Review an in-scope diff against acceptance criteria and repository conventions, with evidence-ranked findings. Use when the user invokes /spl-review or explicitly requests a Superpowers Lite review.
 ---
 
 # Review

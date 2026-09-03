@@ -9,21 +9,21 @@ Lightweight, evidence-driven coding workflows for medium projects and Gemini 3.7
 Yêu cầu rõ và cục bộ được làm theo luồng nhanh: đọc đúng file, sửa tối thiểu, chạy kiểm tra nhắm mục tiêu. Plugin không bắt brainstorm, viết design, tạo worktree, gọi subagent, dùng TDD, hay commit cho mọi việc. Khi task cần kỷ luật cao hơn, gọi một command riêng:
 
 ```text
-/superpowers-lite:plan     Hỏi option khi còn quyết định quan trọng; sinh Plan Contract v2 + Proceed
-/superpowers-lite:execute  Bấm Proceed (App) hoặc gọi lệnh này: bám bước, verify, mới báo done
-/superpowers-lite:debug    Reproduce và tìm root cause trước khi sửa
-/superpowers-lite:verify   Chạy kiểm tra mới và báo phần chưa verify
-/superpowers-lite:review   Review diff theo acceptance criteria
+/spl-plan     Luôn hỏi 4–6 option trước; sinh Plan Contract v2 + Proceed
+/spl-execute  Bấm Proceed (App) hoặc gọi lệnh này: bám bước, verify, mới báo done
+/spl-debug    Reproduce và tìm root cause trước khi sửa
+/spl-verify   Chạy kiểm tra mới và báo phần chưa verify
+/spl-review   Review diff theo acceptance criteria
 ```
 
 Trên Antigravity App:
 
-Lệnh có sẵn của App là `/plan` (artifact + Proceed, **không** hỏi option). Lệnh Lite là **`/superpowers-lite:plan`** — chọn đúng dòng này trong menu `/`.
+Lệnh `/plan` thuộc Antigravity và không bị plugin thay thế. Lệnh Lite là **`/spl-plan`**; năm skill dùng prefix `spl-` để không trùng command hệ thống.
 
-1. Gõ `/superpowers-lite:plan` kèm yêu cầu. Agent inspect repo trước, rồi chỉ hỏi khi còn quyết định ảnh hưởng behavior/interface, data, vendor/dependency, security, compatibility hoặc scope.
-2. Thay đổi kiến trúc thường có một vòng **4–6 câu option** (`ask_question` nếu App có). Không hỏi lại facts đã có và không tạo câu hỏi cho đủ số lượng. Spec thật sự đầy đủ thì ghi plan ngay.
+1. Gõ `/spl-plan` kèm yêu cầu. Agent inspect repo trước rồi luôn hỏi một vòng **4–6 câu option**, kể cả task nhỏ hoặc đã mô tả đầy đủ.
+2. Câu hỏi khóa behavior, scope, invariants và verification; task kiến trúc có thêm tối đa hai câu. Nếu answers còn mâu thuẫn, agent chỉ hỏi tiếp 1–2 blocker questions.
 3. App: sau native question card, chỉ ghi brain artifact `implementation_plan.md` với `RequestFeedback: true`; tuyệt đối không ghi `docs/plans/` ở lượt plan. Host sẽ hiện **Proceed** trên artifact hoặc trong chat.
-4. CLI không có nút Proceed: sau khi duyệt file `docs/plans/`, gọi `/superpowers-lite:execute <path>`. Không tạo plan copy thứ hai.
+4. CLI không có nút Proceed: sau khi duyệt file `docs/plans/`, gọi `/spl-execute <path>`. Không tạo plan copy thứ hai.
 
 Plan mới có phần Markdown dễ review và một `superpowers-lite-contract` JSON comment. Contract ánh xạ `AC-*` → `S-*` → `V-*`, khóa allow/deny scope và lệnh verify. Plan cũ vẫn execute theo legacy mode nhưng không có scope enforcement máy đọc.
 
@@ -32,13 +32,13 @@ Project có thể tự khai báo required checks và protected paths bằng `.ag
 Ví dụ:
 
 ```text
-/superpowers-lite:plan Thêm đăng nhập Google. Chỉ dùng auth stack hiện có,
+/spl-plan Thêm đăng nhập Google. Chỉ dùng auth stack hiện có,
 không đổi schema database. Plan phải có File map, mỗi bước Files/Behavior/Check,
 và lệnh test exact. Chưa viết code.
 ```
 
 ```text
-/superpowers-lite:execute Thực thi docs/plans/2026-09-01-google-login.md.
+/spl-execute Thực thi docs/plans/2026-09-01-google-login.md.
 Làm đúng thứ tự bước, chỉ tick khi check của bước đó pass.
 Dừng nếu cần sửa file ngoài Scope > In. Không báo done khi còn checkbox mở
 hoặc verification fail.
@@ -128,7 +128,7 @@ Script chỉ thao tác target có marker đúng `superpowers-lite`. CLI được
 1. Deploy `All`, restart Antigravity App, và tạo conversation mới.
 2. Mở một bản copy disposable của `tests\fixtures\qa-project`.
 3. Chọn Gemini 3.7 Flash High và gõ `/`; xác nhận đủ năm command.
-4. Chạy quick task, `/superpowers-lite:plan` (4–6 option nếu thiếu spec), **Proceed** hoặc `/execute`, debug, và failed-verification theo `tests\fixtures\SCENARIOS.md`.
+4. Chạy quick task, `/spl-plan` (luôn 4–6 option), **Proceed** hoặc `/spl-execute`, debug, và failed-verification theo `tests\fixtures\SCENARIOS.md`.
 5. Kiểm tra Diff/Artifact/Walkthrough, sau đó chạy lại `verify-install.ps1 -Surface All`.
 
 ## English
@@ -137,7 +137,7 @@ Script chỉ thao tác target có marker đúng `superpowers-lite`. CLI được
 
 A clear, localized request takes the quick path: inspect, make the smallest edit, and run a targeted check. Planning is reserved for meaningful sequencing or risk. Debugging starts from a reproduction. Completion claims require fresh evidence.
 
-The five public commands are `/superpowers-lite:plan`, `execute`, `debug`, `verify`, and `review`. Planning inspects first and asks one option round only for unresolved material decisions. It then writes one 3–7-step Plan Contract v2: the brain `implementation_plan.md` with requested feedback on App, or one workspace `docs/plans` file on CLI, never both. Contract v2 maps acceptance, steps, scope, and verification. Click **Proceed** (App) or run `/execute` (CLI). Completion requires fresh evidence after the final mutation.
+The five public commands are `/spl-plan`, `/spl-execute`, `/spl-debug`, `/spl-verify`, and `/spl-review`. Native `/plan` remains host-owned. Lite planning inspects first and always asks one 4–6 option round before writing a 3–7-step Plan Contract v2: the brain `implementation_plan.md` with requested feedback on App, or one workspace `docs/plans` file on CLI, never both. Click **Proceed** (App) or run `/spl-execute` (CLI). Completion requires fresh evidence after the final mutation.
 
 ### Development and release
 

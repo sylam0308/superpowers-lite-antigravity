@@ -38,7 +38,7 @@ function writeCliExecute(ctx, relative = 'docs/plans/2026-09-02-hook.md') {
   fs.writeFileSync(ctx.transcript, `${JSON.stringify({
     step_index: 0,
     type: 'USER_INPUT',
-    content: `<USER_REQUEST>\n/superpowers-lite:execute Execute ${relative}.\n</USER_REQUEST>`
+    content: `<USER_REQUEST>\n/spl-execute Execute ${relative}.\n</USER_REQUEST>`
   })}\n`);
 }
 

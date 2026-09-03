@@ -1,6 +1,6 @@
 ---
-name: execute
-description: Execute an approved plan against a recorded baseline, enforce Contract v2 scope, verify each step, and claim completion only from fresh evidence. Use after Proceed, plan approval, or /superpowers-lite:execute.
+name: spl-execute
+description: Execute an approved Superpowers Lite plan against a recorded baseline, enforce Contract v2 scope, verify every step, and claim completion only from fresh evidence. Use after a Lite Proceed, Lite plan approval, or /spl-execute.
 ---
 
 # Execute

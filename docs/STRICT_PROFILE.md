@@ -7,7 +7,7 @@ pwsh -File scripts/deploy.ps1 -Surface All -Profile Strict
 pwsh -File scripts/verify-install.ps1 -Surface All -Profile Strict
 ```
 
-Strict uses Antigravity `PreToolUse`, `PostToolUse`, and `Stop` hooks. An App plan becomes active only after the transcript contains the native approval signal and the matching `implementation_plan.md` artifact URI. A CLI plan becomes active only for `/superpowers-lite:execute <one docs/plans/*.md path>`. Merely having an old plan in the repository does not activate Strict execution.
+Strict uses Antigravity `PreToolUse`, `PostToolUse`, and `Stop` hooks. An App plan becomes active only after the transcript contains the native approval signal and the matching `implementation_plan.md` artifact URI. A CLI plan becomes active only for `/spl-execute <one docs/plans/*.md path>`. Merely having an old plan in the repository does not activate Strict execution.
 
 While a valid Contract v2 plan is active, writes outside `scope.allow` are **denied**. Protected paths still `force_ask`. Shell commands are deny-by-default: Strict allows only a single read-only inspection command without shell metacharacters, an exact required verification command, or `git diff --check`. Dependency changes, destructive commands, commits, and pushes require approval outside active Contract execution and are denied unless explicitly represented by an approved executable contract.
 

@@ -1,6 +1,6 @@
 ---
-name: verify
-description: Produce fresh evidence for the current worktree and report exactly what is and is not proven. Use when the user invokes /superpowers-lite:verify, asks whether work is done, or before a completion claim on a substantive change.
+name: spl-verify
+description: Produce fresh evidence for the current worktree and report exactly what is and is not proven. Use when the user invokes /spl-verify or explicitly requests Superpowers Lite verification.
 ---
 
 # Verify

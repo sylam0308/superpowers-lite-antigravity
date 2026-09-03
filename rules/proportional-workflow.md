@@ -26,11 +26,11 @@ Never claim success from expectation, old output, or model confidence. Fresh evi
 
 ## Load only the needed workflow
 
-Use `plan`, `execute`, `debug`, `verify`, or `review` when invoked or clearly needed; do not preload the library. Planning is for meaningful sequencing/risk. Debugging begins with reproduction and a falsifiable hypothesis. Review traces the diff through callers and state transitions. TDD is useful for behavior changes and regressions when a harness exists, not as ceremony for mechanical edits. Worktrees, subagents, commits, and brainstorming are optional, never mandatory.
+Use `spl-plan`, `spl-execute`, `spl-debug`, `spl-verify`, or `spl-review` when explicitly invoked or requested; do not preload the library. Planning is for meaningful sequencing/risk. Debugging begins with reproduction and a falsifiable hypothesis. Review traces the diff through callers and state transitions. TDD is useful for behavior changes and regressions when a harness exists, not as ceremony for mechanical edits. Worktrees, subagents, commits, and brainstorming are optional, never mandatory.
 
-## Plan surface invariant
+## Planning isolation
 
-For `/plan` or `/superpowers-lite:plan`, follow the plan skill: inspect, resolve material decisions, critique feasibility, then produce Contract v2. A new external store/cache/database/queue/service/provider cannot be planned until its applicable backend, topology, contract, ownership/durability, and migration choices have explicit sources. Architecture work commonly needs one round of 4-6 option questions; never invent filler questions. After native `ask_question`, lock to the App surface. App writes only the brain `implementation_plan.md` with requested feedback so **Proceed** renders. In `agy` print/headless mode, never write a brain artifact: incomplete decisions return `needs_input` with questions and no writes; complete decisions write one workspace `docs/plans/` file. Never produce both.
+Do not infer or preload a plugin planning workflow from a generic planning request. A planning skill controls its own intake, artifact, and execution handoff only when that skill is explicitly invoked.
 
 ## Completion gate
 

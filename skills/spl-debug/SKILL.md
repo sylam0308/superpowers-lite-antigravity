@@ -1,6 +1,6 @@
 ---
-name: debug
-description: Diagnose an unknown defect from reproducible evidence and apply the smallest verified fix. Use when the user invokes /superpowers-lite:debug or asks to investigate and fix a bug whose cause is not established.
+name: spl-debug
+description: Diagnose an unknown defect from reproducible evidence and apply the smallest verified fix. Use when the user invokes /spl-debug or explicitly requests the Superpowers Lite debugging workflow.
 ---
 
 # Debug
