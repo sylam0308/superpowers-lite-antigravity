@@ -11,6 +11,12 @@
 - Merge/tag/release: not performed
 - Status: implementation and recorded matrix verified; stable Strict release remains blocked by the additional ad-hoc-check App probe below.
 
+## Push and CI checkpoint
+
+Pushed `6b92c5635dcccdcdeb70f0340d6b4474aa82b8e9` to `origin/cursor/hardening-v0.5.0`; `git ls-remote` confirmed the same SHA. The initial interactive credential lookup could not choose between two saved accounts. Retrying with the request-scoped `credential.username=sylam0308` and non-interactive mode succeeded; no global credential/settings change was made.
+
+[GitHub Actions run 33738811120](https://github.com/sylam0308/superpowers-lite-antigravity/actions/runs/33738811120) passed on both `windows-latest` and `ubuntu-latest` for that checkpoint, including all 23 unit tests, portable validation and the branch diff check. This CI does not run model or native App tests. This evidence-only addendum follows that verified checkpoint; no merge, tag or release was created.
+
 Corrective commits:
 
 | SHA | Change |
