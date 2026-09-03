@@ -95,6 +95,7 @@ const required = [
   'tests/lib/assertions.mjs',
   'tests/lib/inspect-worktree.mjs',
   'tests/schemas/final-report.schema.json',
+  'tests/schemas/plan-intake.schema.json',
   'lib/contract.mjs',
   'tests/fixtures/contracts/valid-plan.md',
   'hooks/strict-gate.mjs',
@@ -132,7 +133,7 @@ if (/D:\\Antigravity Plugin/i.test(read('scripts/deploy.ps1'))) {
   fail('scripts/deploy.ps1: source path must remain portable');
 }
 
-const skillNames = ['plan', 'execute', 'debug', 'verify', 'review'];
+const skillNames = ['spl-plan', 'spl-execute', 'spl-debug', 'spl-verify', 'spl-review'];
 const runtimeFiles = [];
 for (const skillName of skillNames) {
   const relative = `skills/${skillName}/SKILL.md`;
@@ -149,10 +150,10 @@ if (parsedContract.legacy || parsedContract.errors.length) {
 try {
   const hooksTemplate = JSON.parse(read('profiles/strict/hooks.template.json'));
   const strict = hooksTemplate['superpowers-lite-strict'];
-  if (!strict || strict.enabled !== true || !Array.isArray(strict.PreToolUse) || !Array.isArray(strict.Stop)) {
-    fail('profiles/strict/hooks.template.json: missing enabled PreToolUse/Stop strict hook');
+  if (!strict || strict.enabled !== true || !Array.isArray(strict.PreToolUse) || !Array.isArray(strict.PostToolUse) || !Array.isArray(strict.Stop)) {
+    fail('profiles/strict/hooks.template.json: missing enabled PreToolUse/PostToolUse/Stop strict hook');
   }
-  const commands = [strict.PreToolUse?.[0]?.hooks?.[0]?.command, strict.Stop?.[0]?.command];
+  const commands = [strict.PreToolUse?.[0]?.hooks?.[0]?.command, strict.PostToolUse?.[0]?.hooks?.[0]?.command, strict.Stop?.[0]?.command];
   if (commands.some((command) => command !== 'node hooks/strict-gate.mjs')) {
     fail('profiles/strict/hooks.template.json: hooks must use the plugin-runtime relative command');
   }
@@ -182,6 +183,7 @@ for (const { relative, content } of runtimeFiles) {
   }
   for (const [label, pattern] of [
     ['upstream namespace', /superpowers:/i],
+    ['retired slash command namespace', /\/superpowers-lite:/i],
     ['foreign instruction file', /CLAUDE\.md/i],
     ['foreign task tool', /TodoWrite/i],
   ]) {
@@ -201,7 +203,7 @@ for (const absolute of walk(root)) {
   }
 }
 
-const commandNames = skillNames.map((name) => `/superpowers-lite:${name}`);
+const commandNames = skillNames.map((name) => `/${name}`);
 const summary = {
   plugin: manifest?.name ?? null,
   version: manifest?.version ?? null,

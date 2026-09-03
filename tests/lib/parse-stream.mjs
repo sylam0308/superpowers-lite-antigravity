@@ -22,6 +22,7 @@ function classifyTool(step) {
   return {
     name,
     command,
+    parameters: info.parameters ?? {},
     kind: writeTools.has(name) || isMutationCommand
       ? 'mutation'
       : isVerificationCommand
@@ -84,7 +85,8 @@ export function parseStream(raw) {
     systemMessages,
     invalidLines,
     usage: result?.usage ?? {},
-    conversationId: result?.conversation_id ?? events.find((item) => item.conversation_id)?.conversation_id ?? null
+    conversationId: result?.conversation_id ?? events.find((item) => item.conversation_id)?.conversation_id ?? null,
+    litePlanSkillObserved: /skills[\\/]spl-plan[\\/]SKILL\.md/i.test(raw)
   };
 }
 

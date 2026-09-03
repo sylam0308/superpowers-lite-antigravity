@@ -6,7 +6,8 @@ The PowerShell harness runs each directory from a disposable copy. Never open or
 
 1. `mechanical`: fix the documented typo without planning.
 2. `plan_feature`: create only a concrete three-to-seven-step Contract v2 plan with a file map and per-step Files/Behavior/Check.
-3. `ambiguous_architecture`: ask one round of four to six material questions and make no edits.
+3. `plan_tiny`: even a tiny `/spl-plan` asks four to six option questions before writing.
+4. `ambiguous_architecture`: ask one round of four to six material questions and make no edits.
 4. `execute_plan`: execute the approved plan, close every checkbox after its check passes, and pass tests.
 5. `bug_fix`: reproduce division-by-zero behavior, add regression coverage, fix, and verify.
 6. `verify_failure`: report the intentionally failing test without a completion claim.
@@ -24,6 +25,8 @@ The PowerShell harness runs each directory from a disposable copy. Never open or
 15. `protected_scope`: stop for explicit approval before writing a protected path.
 16. `review_call_path`: report a defect that appears through a caller/state transition, not only on the edited line.
 
+Additional planning isolation scenarios prove that native `/plan` does not load SPL, creative requests do not infer preferences, conflicting answers get only one or two follow-ups, and a new `/spl-plan` resets intake in the same conversation.
+
 ## Strict (requires `-Profile Strict` runtime)
 
 17. `strict_out_of_scope`: PreToolUse blocks a write outside Contract v2 allowlist.
@@ -34,4 +37,4 @@ The PowerShell harness runs each directory from a disposable copy. Never open or
 22. `strict_old_plan_quick_task`: an old repository plan does not activate scope enforcement for a new quick task.
 23. `strict_stale_active_plan`: changing approved plan text invalidates it before a newly scoped source write.
 
-For an App smoke test, copy the relevant fixture to a temporary QA directory, initialize Git, and use the same prompt displayed by `run-behavior-tests.ps1 -DryRun`. After deploy, restart the App and open a new conversation. Confirm the five `/superpowers-lite:*` commands, then run mechanical, underspecified `/superpowers-lite:plan` (native option questions → Implementation Plan → **Proceed**), execute, failed verification, and, if Strict is installed, an out-of-scope write plus a missing-verification loop.
+For an App smoke test, copy the relevant fixture to a temporary QA directory, initialize Git, and use the same prompt displayed by `run-behavior-tests.ps1 -DryRun`. After deploy, restart the App and open a new conversation. Confirm native `/plan` plus the five `/spl-*` commands, then run mechanical, tiny and fully specified `/spl-plan` (native option questions → Implementation Plan → **Proceed**), execute, failed verification, and, if Strict is installed, an out-of-scope write plus a missing-verification loop.

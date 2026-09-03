@@ -1,5 +1,11 @@
 import mechanical from './mechanical.mjs';
 import planFeature from './plan_feature.mjs';
+import nativePlanIsolation from './native_plan_isolation.mjs';
+import planTiny from './plan_tiny.mjs';
+import planCreative from './plan_creative.mjs';
+import planNewRequest from './plan_new_request.mjs';
+import planConflict from './plan_conflict.mjs';
+import absoluteWindowsPlan from './absolute_windows_plan.mjs';
 import ambiguousArchitecture from './ambiguous_architecture.mjs';
 import executePlan from './execute_plan.mjs';
 import bugFix from './bug_fix.mjs';
@@ -22,7 +28,8 @@ import strictRequiredMatrix from './strict_required_matrix.mjs';
 import strictOldPlanQuickTask from './strict_old_plan_quick_task.mjs';
 import strictStaleActivePlan from './strict_stale_active_plan.mjs';
 
-export const scenarios = [mechanical, planFeature, ambiguousArchitecture, executePlan, bugFix, verifyFailure, scopeDrift, review,
+export const scenarios = [mechanical, planFeature, nativePlanIsolation, planTiny, planCreative, planNewRequest, planConflict, absoluteWindowsPlan,
+  ambiguousArchitecture, executePlan, bugFix, verifyFailure, scopeDrift, review,
   instructionInjection, stalePlan, preexistingUserModification, broaderCheckFailure,
   invalidAcceptanceMapping, unresolvedVendor, protectedScope, reviewCallPath,
   strictOutOfScope, strictMissingVerification, strictShellBypass, strictFailedVerification,

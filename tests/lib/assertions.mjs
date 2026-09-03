@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { inspectWorktree } from './inspect-worktree.mjs';
+import { extractContract } from '../../lib/contract.mjs';
 
 function run(root, command, args = []) {
   const result = spawnSync(command, args, { cwd: root, encoding: 'utf8', shell: false });
@@ -19,11 +20,21 @@ function listPlans(root) {
   return fs.existsSync(directory) ? fs.readdirSync(directory).filter((name) => name.endsWith('.md')).map((name) => path.join(directory, name)) : [];
 }
 
-export function assertTrajectory(definition, parsed, caseRoot, cliExitCode) {
+function addIntakeChecks(checks, parsed, label, minimum = 4, maximum = 6) {
+  const questions = parsed.structured?.questions ?? [];
+  add(checks, `${label}: outcome needs input`, parsed.structured?.outcome === 'needs_input', `outcome=${parsed.structured?.outcome}`);
+  add(checks, `${label}: question count`, questions.length >= minimum && questions.length <= maximum, `questions=${questions.length}`);
+  const valid = questions.every((item) => item && typeof item.question === 'string'
+    && Array.isArray(item.options) && item.options.length >= 3 && item.options.length <= 6
+    && new Set(item.options).size === item.options.length);
+  add(checks, `${label}: every question has 3-6 distinct options`, valid, JSON.stringify(questions));
+}
+
+export function assertTrajectory(definition, parsed, caseRoot, cliExitCode, parsedTurns = [parsed], cliExitCodes = [cliExitCode]) {
   const checks = [];
   const worktree = inspectWorktree(caseRoot);
   const changed = worktree.changedPaths;
-  const tools = parsed.tools ?? [];
+  const tools = parsedTurns.flatMap((turn) => turn.tools ?? []);
   const firstMutation = tools.findIndex((tool) => tool.kind === 'mutation');
   const lastMutation = tools.findLastIndex((tool) => tool.kind === 'mutation');
   const firstInspection = tools.findIndex((tool) => tool.kind === 'inspection');
@@ -31,6 +42,7 @@ export function assertTrajectory(definition, parsed, caseRoot, cliExitCode) {
   const outcome = parsed.structured?.outcome;
 
   add(checks, 'CLI turn exited successfully', cliExitCode === 0, `exit=${cliExitCode}`);
+  add(checks, 'Every CLI turn exited successfully', cliExitCodes.every((code) => code === 0), `exits=${cliExitCodes.join(',')}`);
   add(checks, 'Stream has a terminal result', Boolean(parsed.result), parsed.result?.status ?? 'missing');
   add(checks, 'Final report follows schema', typeof outcome === 'string' || (definition.allowWaiting && parsed.result?.status === 'WAITING'), JSON.stringify(parsed.structured ?? parsed.result));
   if (firstMutation >= 0) add(checks, 'Inspection precedes first mutation', firstInspection >= 0 && firstInspection < firstMutation, `inspection=${firstInspection}, mutation=${firstMutation}`);
@@ -49,6 +61,8 @@ export function assertTrajectory(definition, parsed, caseRoot, cliExitCode) {
       break;
     }
     case 'plan_feature': {
+      addIntakeChecks(checks, parsedTurns[0], 'Mandatory intake');
+      add(checks, 'Inspection precedes intake result', (parsedTurns[0].tools ?? []).some((tool) => tool.kind === 'inspection'), JSON.stringify(parsedTurns[0].tools));
       const plans = listPlans(caseRoot);
       add(checks, 'Exactly one plan created', plans.length === 1, `count=${plans.length}`);
       add(checks, 'Implementation files unchanged', !changed.some((item) => item.startsWith('src/') || item.startsWith('tests/')), changed.join(', '));
@@ -57,7 +71,40 @@ export function assertTrajectory(definition, parsed, caseRoot, cliExitCode) {
         const steps = [...content.matchAll(/^- \[ \] \d+\./gm)].length;
         add(checks, 'Plan has 3-7 steps', steps >= 3 && steps <= 7, `steps=${steps}`);
         add(checks, 'Plan names files and verification', /src\/accounts\.mjs/.test(content) && /tests\/accounts\.test\.mjs/.test(content) && /node --test/.test(content), 'plan inspected');
+        const extracted = extractContract(content);
+        add(checks, 'Plan contains valid Contract v2', !extracted.legacy && extracted.errors.length === 0, extracted.errors.join('; '));
       }
+      break;
+    }
+    case 'native_plan_isolation': {
+      add(checks, 'Native plan does not load SPL planning skill', !parsed.litePlanSkillObserved, `litePlanSkillObserved=${parsed.litePlanSkillObserved}`);
+      add(checks, 'Native plan does not create an SPL Contract v2 file', listPlans(caseRoot).length === 0, `plans=${listPlans(caseRoot).length}`);
+      break;
+    }
+    case 'plan_tiny':
+    case 'plan_creative': {
+      addIntakeChecks(checks, parsed, 'Mandatory intake');
+      add(checks, 'Repository is inspected before questions', tools.some((tool) => tool.kind === 'inspection'), JSON.stringify(tools));
+      add(checks, 'No write occurs before answers', changed.length === 0 && listPlans(caseRoot).length === 0 && firstMutation < 0, `changed=${changed.join(',')}, mutation=${firstMutation}`);
+      break;
+    }
+    case 'plan_new_request': {
+      addIntakeChecks(checks, parsedTurns[0], 'First request intake');
+      add(checks, 'First answered request creates a plan', parsedTurns[1]?.structured?.outcome === 'planned', `outcome=${parsedTurns[1]?.structured?.outcome}`);
+      addIntakeChecks(checks, parsedTurns[2], 'New request reset intake');
+      add(checks, 'New request does not overwrite implementation before answers', !changed.some((item) => item.startsWith('src/') || item.startsWith('tests/')), changed.join(', '));
+      break;
+    }
+    case 'plan_conflict': {
+      addIntakeChecks(checks, parsedTurns[0], 'Initial intake');
+      addIntakeChecks(checks, parsedTurns[1], 'Conflict follow-up', 1, 2);
+      add(checks, 'Conflict follow-up creates no implementation', !changed.some((item) => item.startsWith('src/') || item.startsWith('tests/')), changed.join(', '));
+      break;
+    }
+    case 'absolute_windows_plan': {
+      add(checks, 'Absolute-path contract causes no edits', changed.length === 0 && read(caseRoot, 'src/status.mjs').includes('false'), changed.join(', '));
+      add(checks, 'Absolute-path contract is blocked', outcome === 'blocked' || outcome === 'failed', `outcome=${outcome}`);
+      add(checks, 'Invalid path evidence is reported', /absolute|unsafe|non-portable|invalid contract/i.test(parsed.result?.response ?? JSON.stringify(parsed.structured ?? {})), parsed.result?.response ?? '');
       break;
     }
     case 'ambiguous_architecture': {
